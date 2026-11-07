@@ -73,9 +73,9 @@ Los límites se ajustarán a lo que revele el inventario:
 2. `projects: add GNSS ArraySim ZCU102 baseline` — realizado (`2df3d9613`):
    copia de todo el contenido fuente versionado de FMCOMMS5 y adaptación de
    nombres de proyecto en las tres placas.
-3. `library: add GNSS ArraySim IP dependencies` — paquetes extraídos en
-   `library/gnss_arraysim`, registro en catálogo y verificación; commit local
-   de este hito en preparación.
+3. `library: add GNSS ArraySim IP dependencies` — realizado (`50b41e800`):
+   paquetes extraídos en `library/gnss_arraysim`, registro en catálogo y
+   verificación. Las IP todavía no se conectan al flujo de muestras.
 4. `projects: integrate GNSS ArraySim signal chain` — instancias, conexiones y
    direcciones de control.
 5. `docs: record GNSS ArraySim validation` — resultados verificables y guía de
@@ -191,4 +191,5 @@ direcciones AXI o IRQ, pues dependerán de la arquitectura elegida.
   `check_ip_catalog.tcl` encontró los cuatro VLNV en Vivado 2022.2. La
   validación `ADI_SKIP_SYNTHESIS=1` del proyecto completo terminó con código 0,
   sin ejecutar la síntesis ni el ajuste de retardos que depende de ella. Las IP
-  externas todavía no están instanciadas en el camino de muestras.
+  externas todavía no están instanciadas en el camino de muestras. Commit local
+  del catálogo y paquetes: `50b41e800`.

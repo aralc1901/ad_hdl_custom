@@ -63,7 +63,8 @@ ADI_SKIP_SYNTHESIS=1 PATH=/tools/Xilinx/Vivado/2022.2/bin:$PATH vivado -mode bat
 - `make -n gnss_arraysim.zcu102`: pasó y resolvió el proyecto y sus nueve
   dependencias ADI. El primer intento detectó que el bloque común aún no se
   había renombrado; se corrigieron el nombre y sus tres referencias y se repitió
-  con resultado correcto.
+  con resultado correcto. Se repitió tras añadir las cuatro dependencias HLS y
+  siguió resolviendo el objetivo.
 - La compilación Vivado 2022.2 del esqueleto creó y validó `system.bd`, pero
   falló al iniciar síntesis: `[Common 17-345] A valid license was not found for
   feature 'Synthesis' and/or device 'xczu9eg'`. No se obtuvo XSA. Vivado
