@@ -12,6 +12,10 @@ M_DEPS += ../../common/zcu102/zcu102_system_constr.xdc
 M_DEPS += ../../common/zcu102/zcu102_system_bd.tcl
 M_DEPS += ../../../library/common/ad_iobuf.v
 M_DEPS += ../../../library/axi_ad9361/axi_ad9361_delay.tcl
+M_DEPS += ../../../library/gnss_arraysim/gnss_prn_loop/component.xml
+M_DEPS += ../../../library/gnss_arraysim/jam_tone_loop/component.xml
+M_DEPS += ../../../library/gnss_arraysim/jam_gaussian_loop/component.xml
+M_DEPS += ../../../library/gnss_arraysim/fp_arraygen_loop/component.xml
 
 LIB_DEPS += axi_ad9361
 LIB_DEPS += axi_dmac

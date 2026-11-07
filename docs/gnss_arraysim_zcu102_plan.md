@@ -1,6 +1,7 @@
 # Plan: proyecto GNSS ArraySim para FMCOMMS5 y ZCU102
 
-Fecha: 2026-11-07. Estado: inventario de IP completado; esqueleto e integración pendientes.
+Fecha: 2026-11-07. Estado: esqueleto y registro de IP en catálogo completados;
+conexión funcional y síntesis pendientes.
 
 ## Objetivo y alcance
 
@@ -69,10 +70,12 @@ El nombre `gnss_arraysim` es provisional hasta confirmar el nombre deseado.
 Los límites se ajustarán a lo que revele el inventario:
 
 1. `docs: plan GNSS ArraySim ZCU102` — este plan y el reconocimiento inicial.
-2. `projects: add GNSS ArraySim ZCU102 baseline` — copia adaptada y comprobable
-   del diseño FMCOMMS5, sin IP GNSS.
-3. `library: add GNSS ArraySim IP dependencies` — fuentes y empaquetado
-   necesarios, si procede incorporarlos a este repositorio.
+2. `projects: add GNSS ArraySim ZCU102 baseline` — realizado (`2df3d9613`):
+   copia de todo el contenido fuente versionado de FMCOMMS5 y adaptación de
+   nombres de proyecto en las tres placas.
+3. `library: add GNSS ArraySim IP dependencies` — paquetes extraídos en
+   `library/gnss_arraysim`, registro en catálogo y verificación; commit local
+   de este hito en preparación.
 4. `projects: integrate GNSS ArraySim signal chain` — instancias, conexiones y
    direcciones de control.
 5. `docs: record GNSS ArraySim validation` — resultados verificables y guía de
@@ -172,3 +175,20 @@ direcciones AXI o IRQ, pues dependerán de la arquitectura elegida.
   ocho ZIP y el Block Design experimental. Registrados anchos, protocolos,
   discrepancia de partes y resultado de verificación documentado. No se ejecutó
   HLS ni se modificó el repositorio externo.
+- 2026-11-07: copiados los 20 archivos fuente versionados de `projects/fmcomms5`
+  a `projects/gnss_arraysim`, incluido `common/` y las tres placas. No se
+  arrastraron 281 MB de salidas locales de Vivado. Se renombraron identificadores
+  de proyecto y el bloque común; se verificó con `cmp` que el bloque AD9361,
+  `system_top.v` y `system_constr.xdc` de ZCU102 mantienen su contenido. El
+  primer `make -n gnss_arraysim.zcu102` detectó una referencia a un nombre de
+  fichero aún no adaptado; corregida y repetida, terminó con código 0. Commit
+  local: `2df3d9613`.
+- 2026-11-07: la compilación base con `PATH=/tools/Xilinx/Vivado/2022.2/bin:$PATH
+  make gnss_arraysim.zcu102` creó y validó el Block Design, pero falló en
+  síntesis por licencia Vivado `[Common 17-345]` para `Synthesis`/`xczu9eg`.
+  No se generó XSA. Los paquetes PRN, tono, ruido y ArrayGen se extrajeron
+  completos bajo `library/gnss_arraysim`; hashes y procedencia en su README.
+  `check_ip_catalog.tcl` encontró los cuatro VLNV en Vivado 2022.2. La
+  validación `ADI_SKIP_SYNTHESIS=1` del proyecto completo terminó con código 0,
+  sin ejecutar la síntesis ni el ajuste de retardos que depende de ella. Las IP
+  externas todavía no están instanciadas en el camino de muestras.
