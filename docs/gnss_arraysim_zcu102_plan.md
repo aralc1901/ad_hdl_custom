@@ -1,7 +1,15 @@
 # Plan: proyecto GNSS ArraySim para FMCOMMS5 y ZCU102
 
-Fecha: 2026-11-07. Estado: esqueleto y registro de IP en catálogo completados;
-conexión funcional y síntesis pendientes.
+Fecha inicial: 2026-11-07. Actualización: 2026-11-10. Estado: esqueleto y
+catálogo completados; primera captura digital de tono implementada y validada
+en Block Design y simulación del capturador. Síntesis e implementación de esta
+revisión pendientes.
+
+> Las secciones de inventario y decisiones pendientes conservan el contexto
+> histórico. Para la etapa actual se acordó únicamente `jam_tone_loop` →
+> captura digital finita en BRAM, manteniendo FMCOMMS5 y ambos DMA. La
+> arquitectura, mapa, registros y uso desde Linux están en
+> [`../projects/gnss_arraysim/README.md`](../projects/gnss_arraysim/README.md).
 
 ## Objetivo y alcance
 
@@ -76,10 +84,9 @@ Los límites se ajustarán a lo que revele el inventario:
 3. `library: add GNSS ArraySim IP dependencies` — realizado (`50b41e800`):
    paquetes extraídos en `library/gnss_arraysim`, registro en catálogo y
    verificación. Las IP todavía no se conectan al flujo de muestras.
-4. `projects: integrate GNSS ArraySim signal chain` — instancias, conexiones y
-   direcciones de control.
-5. `docs: record GNSS ArraySim validation` — resultados verificables y guía de
-   reproducción; se combinará con el anterior si la validación queda completa.
+4. `projects: add GNSS tone digital capture on ZCU102` — primera prueba de
+   `jam_tone_loop` con BRAM, simulación y documentación; sin ArrayGen ni RF.
+5. Integración de ArrayGen, ruta RF y validación física — etapas posteriores.
 
 No se harán `git push`.
 
@@ -193,3 +200,29 @@ direcciones AXI o IRQ, pues dependerán de la arquitectura elegida.
   sin ejecutar la síntesis ni el ajuste de retardos que depende de ella. Las IP
   externas todavía no están instanciadas en el camino de muestras. Commit local
   del catálogo y paquetes: `50b41e800`.
+- 2026-11-10: el usuario informó que resolvió la licencia y que
+  `ADI_MAX_OOC_JOBS=1 make gnss_arraysim.zcu102` terminó en `OK` para el estado
+  anterior a la captura. Es un resultado **reportado por el usuario**, no una
+  compilación repetida en esta etapa.
+- 2026-11-10: se comprobó el estado Git antes de editar. Había diez borrados
+  locales del usuario bajo `projects/gnss_arraysim/zc702/` y `zc706/`; se
+  conservaron y no pertenecen al commit de esta etapa. Se inspeccionaron el
+  `component.xml`, RTL y cabecera de registros del paquete de tono importado,
+  y se compararon con las fuentes HLS externas. Se confirmó VLNV
+  `xilinx.com:hls:jam_tone_loop:1.0`, AXI4-Lite, `ap_clk`, `ap_rst_n`, IRQ,
+  AXI4-Stream de 32 bits sin TLAST, `{Q,I}` Q2.14, parámetros y propagación de
+  `TREADY`. El ZIP conserva cambios locales del origen y fue exportado para
+  XCZU7EG; no se modificó. Vivado 2022.2 lo instanció en un proyecto en memoria
+  para XCZU9EG y validó el Block Design final, sin hacer síntesis/timing.
+- 2026-11-10: se añadió un capturador de hasta 1024 muestras aceptadas por
+  `TVALID && TREADY`, con estado, rechazo de longitud inválida, pausa y rearme.
+  El PS configura el tono y el capturador por AXI4-Lite/GPIO y lee BRAM a
+  `0x87010000`. Direcciones finales: tono `0x87000000`, BRAM `0x87010000`,
+  GPIO `0x87020000`; IRQ tono `ps-14`. El orden es armar, arrancar, esperar
+  DONE, leer y rearmar. El contador sustituye TLAST. FMCOMMS5 y los dos DMA
+  permanecen conectados. `make -n` pasó; la simulación XSim focalizada pasó;
+  la validación de `system.bd` pasó en `gnss_tone_validation4/`, sin alterar el
+  build existente. Hubo una advertencia de conexión de ancho BRAM 12→32 bits
+  con extensión de ceros en el wrapper y una advertencia de permisos del Tcl
+  Store local. No se han ejecutado síntesis ni implementación con esta revisión,
+  ni se ha probado el acceso Linux a la placa.

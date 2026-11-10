@@ -16,6 +16,7 @@ M_DEPS += ../../../library/gnss_arraysim/gnss_prn_loop/component.xml
 M_DEPS += ../../../library/gnss_arraysim/jam_tone_loop/component.xml
 M_DEPS += ../../../library/gnss_arraysim/jam_gaussian_loop/component.xml
 M_DEPS += ../../../library/gnss_arraysim/fp_arraygen_loop/component.xml
+M_DEPS += tone_capture.v
 
 LIB_DEPS += axi_ad9361
 LIB_DEPS += axi_dmac
