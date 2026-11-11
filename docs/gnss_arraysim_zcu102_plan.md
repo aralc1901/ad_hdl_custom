@@ -1,13 +1,14 @@
 # Plan: proyecto GNSS ArraySim para FMCOMMS5 y ZCU102
 
 Fecha inicial: 2026-11-07. Actualización: 2026-11-11. Estado: esqueleto y
-catálogo completados; primera captura digital de tono implementada y validada
-en Block Design y simulación del capturador. Síntesis e implementación de esta
-revisión pendientes.
+catálogo completados; capturas digitales independientes de tono y ruido
+gaussiano implementadas y validadas en Block Design y simulación del
+capturador. Síntesis e implementación de esta revisión pendientes.
 
 > Las secciones de inventario y decisiones pendientes conservan el contexto
-> histórico. Para la etapa actual se acordó únicamente `jam_tone_loop` →
-> captura digital finita en BRAM, manteniendo FMCOMMS5 y ambos DMA. La
+> histórico. Tras la prueba de `jam_tone_loop`, la etapa actual añade
+> `jam_gaussian_loop` → captura digital finita en otra BRAM, manteniendo
+> FMCOMMS5 y ambos DMA. La
 > arquitectura, mapa, registros y uso desde Linux están en
 > [`../projects/gnss_arraysim/README.md`](../projects/gnss_arraysim/README.md).
 
@@ -86,7 +87,9 @@ Los límites se ajustarán a lo que revele el inventario:
    verificación. Las IP todavía no se conectan al flujo de muestras.
 4. `projects: add GNSS tone digital capture on ZCU102` — primera prueba de
    `jam_tone_loop` con BRAM, simulación y documentación; sin ArrayGen ni RF.
-5. Integración de ArrayGen, ruta RF y validación física — etapas posteriores.
+5. `projects: add GNSS Gaussian digital capture on ZCU102` — segunda prueba
+   digital, con capturador compartido, BRAM independiente y acceso desde PS.
+6. Integración de ArrayGen, ruta RF y validación física — etapas posteriores.
 
 No se harán `git push`.
 
@@ -255,3 +258,30 @@ direcciones AXI o IRQ, pues dependerán de la arquitectura elegida.
   con código 0: `validate_bd_design` pasó y el log indicó `Skipping synthesis`.
   La ruta completa sólo se inspeccionó mediante `make -n`; no se lanzó. Los
   comandos están en el README.
+- 2026-11-11: se inspeccionó primero el paquete realmente importado
+  `library/gnss_arraysim/jam_gaussian_loop`: `component.xml`, RTL y cabecera
+  de registros. Se confirmó VLNV `xilinx.com:hls:jam_gaussian_loop:1.0`,
+  AXI4-Lite, reloj/reset, IRQ y `noise_out` AXI4-Stream de 32 bits sin TLAST,
+  con I en bits 15:0 y Q en bits 31:16, ambos Q2.14 con signo. Registros:
+  `n_samples` 0x10, `amplitude` 0x18 y `seed` 0x20; semilla no nula reinicia
+  los LFSR. El ZIP original tiene SHA-256
+  `f1a8f3abf8176e0467bcc02e57a4926bbb8cf8780c637694b840f7e5e024d83d`;
+  el RTL principal importado coincide con el ZIP. Se exportó para XCZU7EG;
+  `check_gaussian_package.tcl` confirmó registro e instanciación para XCZU9EG
+  en Vivado 2022.2, sin probar síntesis ni timing. No se alteró el paquete.
+- 2026-11-11: se añadió `jam_gaussian_0` con control AXI-Lite, IRQ `ps-15`,
+  capturador de 1024 palabras, GPIO y BRAM independientes. Direcciones PS:
+  IP `0x87030000`, BRAM `0x87040000`, GPIO `0x87050000`.
+  `tone_capture.v` se generalizó a `stream_capture.v` para ambas ramas, con
+  `X_INTERFACE_IGNORE` en los cuatro puertos susceptibles de inferencia
+  errónea. El test XSim del capturador pasó. `make -n` y
+  `PATH=/tools/Xilinx/Vivado/2022.2/bin:$PATH make gnss_arraysim.zcu102`
+  terminaron con código 0; este último creó el `.xpr` y validó `system.bd`
+  sin síntesis. El BD generado muestra ocho puertos reales y ninguna
+  interfaz inferida en cada instancia de captura, direcciones sin
+  solapamiento y los dos DMA FMCOMMS5 conservados. El script
+  `capture_gaussian.py` pasó `--help`, pero falta ejecutarlo en placa.
+  Siguen pendientes síntesis, implementación, bitstream, timing y validación
+  estadística del ruido; la documentación externa informa fallos previos de
+  correlación. Se conservaron sin tocar los diez borrados locales del usuario
+  en ZC702 y ZC706. No hubo push.

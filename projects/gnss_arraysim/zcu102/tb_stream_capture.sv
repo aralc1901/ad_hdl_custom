@@ -1,15 +1,15 @@
 `timescale 1ns/1ps
 
-module tb_tone_capture;
+module tb_stream_capture;
   reg clk = 1'b0;
   always #5 clk = ~clk;
 
   reg resetn = 1'b0;
   reg [31:0] control = 32'd0;
   wire [31:0] status;
-  reg [31:0] tone_data = 32'd0;
-  reg tone_valid = 1'b0;
-  wire tone_ready;
+  reg [31:0] sample_data = 32'd0;
+  reg sample_valid = 1'b0;
+  wire sample_ready;
   wire capture_write_en;
   wire [31:0] capture_write_addr;
 
@@ -18,9 +18,9 @@ module tb_tone_capture;
   integer i;
   integer old_writes;
 
-  tone_capture dut (
+  stream_capture dut (
     .clk(clk), .resetn(resetn), .control(control), .status(status),
-    .tone_valid(tone_valid), .tone_ready(tone_ready),
+    .sample_valid(sample_valid), .sample_ready(sample_ready),
     .capture_write_en(capture_write_en),
     .capture_write_addr(capture_write_addr)
   );
@@ -29,7 +29,7 @@ module tb_tone_capture;
     if (capture_write_en) begin
       if (capture_write_addr > 4092 || capture_write_addr[1:0] != 2'b00)
         $fatal(1, "BRAM byte address outside capacity or unaligned");
-      memory[capture_write_addr[11:2]] <= tone_data;
+      memory[capture_write_addr[11:2]] <= sample_data;
       writes <= writes + 1;
     end
   end
@@ -49,11 +49,11 @@ module tb_tone_capture;
 
   task automatic send_word(input [31:0] value);
     @(negedge clk);
-    tone_data = value;
-    tone_valid = 1'b1;
-    do @(posedge clk); while (!tone_ready);
+    sample_data = value;
+    sample_valid = 1'b1;
+    do @(posedge clk); while (!sample_ready);
     @(negedge clk);
-    tone_valid = 1'b0;
+    sample_valid = 1'b0;
   endtask
 
   initial begin
@@ -61,30 +61,30 @@ module tb_tone_capture;
     resetn = 1'b1;
 
     // A producer may assert TVALID before arming. No transfer is accepted.
-    tone_data = 32'h11112222;
-    tone_valid = 1'b1;
+    sample_data = 32'h11112222;
+    sample_valid = 1'b1;
     repeat (3) @(posedge clk);
-    check(!tone_ready && writes == 0, "unarmed backpressure");
+    check(!sample_ready && writes == 0, "unarmed backpressure");
     arm(11'd4);
     @(posedge clk);
     @(negedge clk);
-    tone_valid = 1'b0;
+    sample_valid = 1'b0;
     check(status[10:0] == 11'd1 && memory[0] == 32'h11112222,
           "first accepted sample");
 
     // Pause in the middle of a burst; the offered word must not be written.
     control[1] = 1'b1;
-    tone_data = 32'h33334444;
-    tone_valid = 1'b1;
+    sample_data = 32'h33334444;
+    sample_valid = 1'b1;
     old_writes = writes;
     repeat (4) @(posedge clk);
-    check(!tone_ready && writes == old_writes && status[10:0] == 11'd1,
+    check(!sample_ready && writes == old_writes && status[10:0] == 11'd1,
           "paused backpressure");
     @(negedge clk);
     control[1] = 1'b0;
     @(posedge clk);
     @(negedge clk);
-    tone_valid = 1'b0;
+    sample_valid = 1'b0;
     send_word(32'h55556666);
     send_word(32'h77778888);
     check(status[11] && !status[12] && status[10:0] == 11'd4,
@@ -94,18 +94,18 @@ module tb_tone_capture;
           "sample order");
 
     old_writes = writes;
-    tone_valid = 1'b1;
-    tone_data = 32'hdeaddead;
+    sample_valid = 1'b1;
+    sample_data = 32'hdeaddead;
     repeat (3) @(posedge clk);
-    check(!tone_ready && writes == old_writes, "full backpressure");
+    check(!sample_ready && writes == old_writes, "full backpressure");
     @(negedge clk);
-    tone_valid = 1'b0;
+    sample_valid = 1'b0;
 
     // Full capacity, including the last address and an exact count of 1024.
     arm(11'd1024);
     for (i = 0; i < 1024; i = i + 1)
       send_word(32'h80000000 | i);
-    check(status[11] && status[10:0] == 11'd1024 && !tone_ready,
+    check(status[11] && status[10:0] == 11'd1024 && !sample_ready,
           "1024-word completion");
     check(memory[0] == 32'h80000000 && memory[1023] == 32'h800003ff,
           "first and final BRAM address");
@@ -115,7 +115,7 @@ module tb_tone_capture;
     check(status[13] && !status[12] && !status[11] && status[10:0] == 0,
           "zero length rejected");
     arm(11'd1025);
-    check(status[13] && !tone_ready && status[10:0] == 0,
+    check(status[13] && !sample_ready && status[10:0] == 0,
           "over-capacity rejected");
 
     // An arm edge during capture reports an error without losing the burst.
@@ -134,7 +134,7 @@ module tb_tone_capture;
     check(status[11] && status[10:0] == 11'd1 &&
           memory[0] == 32'hfedcba98, "rearm captures new data");
 
-    $display("PASS tone_capture: handshake, order, 1024 words, pause, errors, rearm");
+    $display("PASS stream_capture: handshake, order, 1024 words, pause, errors, rearm");
     $finish;
   end
 endmodule

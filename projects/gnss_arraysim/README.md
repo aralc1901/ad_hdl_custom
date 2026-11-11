@@ -30,8 +30,8 @@ el árbol completo sea coherente; la integración de las IP GNSS se hará sólo 
 
 Los cuatro paquetes HLS completos, sus hashes y advertencias de procedencia
 están en [`../../library/gnss_arraysim/README.md`](../../library/gnss_arraysim/README.md).
-La primera prueba digital de `jam_tone_loop` se describe abajo. Las otras tres
-IP siguen disponibles en el catálogo, sin instancias en el diseño.
+Las pruebas digitales de `jam_tone_loop` y `jam_gaussian_loop` se describen
+abajo. PRN y ArrayGen siguen disponibles en el catálogo, sin instancias.
 
 ## Compilación: validación por defecto
 
@@ -73,28 +73,35 @@ satisfactorio y mensaje `Skipping synthesis` en
 directorio. **El build completo con el flag no se ha ejecutado**; queda a
 decisión del usuario.
 
-## Primera prueba digital: tono a BRAM
+## Capturas digitales: tono y ruido a BRAM
 
 ```text
-PS AXI ──┬── AXI4-Lite jam_tone_loop ── tone_out (32 bits) ── capturador ── BRAM puerto B
-         ├── AXI GPIO (armado/estado) ────────────────────────────┘
-         └── AXI BRAM Controller ── BRAM puerto A ── lectura PS/Linux
+PS AXI ──┬── AXI4-Lite jam_tone_loop ── tone_out ── capturador T ── BRAM T puerto B
+         ├── GPIO T (armado/estado) ───────────────────────────────┘
+         ├── AXI BRAM Controller T ── BRAM T puerto A ── PS/Linux
+         ├── AXI4-Lite jam_gaussian_loop ── noise_out ── capturador G ── BRAM G puerto B
+         ├── GPIO G (armado/estado) ─────────────────────────────────┘
+         └── AXI BRAM Controller G ── BRAM G puerto A ── PS/Linux
 
 FMCOMMS5: 2 × AD9361 ↔ FIFO de radio ↔ DMA ADC y DMA DAC (sin cambios)
 ```
 
-El capturador acepta sólo `TVALID && TREADY`, escribe una palabra alineada en
-`4 × índice` y termina tras el número solicitado (1–1024). No necesita `TLAST`:
+Cada instancia de `stream_capture` acepta sólo `TVALID && TREADY`, escribe una
+palabra alineada en `4 × índice` y termina tras el número solicitado (1–1024).
+No necesita `TLAST`:
 el límite es el contador de transferencias aceptadas. `TREADY` baja antes de
-armar, durante pausa y después de completar. Reloj de `jam_tone_loop`, GPIO,
-capturador, BRAM B y controlador AXI BRAM: `sys_cpu_clk` (100 MHz); reset
+armar, durante pausa y después de completar. Los generadores, GPIO,
+capturadores, BRAM B y controladores AXI BRAM usan `sys_cpu_clk` (100 MHz); reset
 activo bajo `sys_cpu_resetn`. Se conecta `interrupt` del tono a `ps-14`; la
-captura se consulta por estado GPIO. No hay salida RF ni ArrayGen en esta etapa.
+captura se consulta por estado GPIO. El ruido usa `ps-15`. No hay salida RF ni
+ArrayGen en esta etapa.
+
 La interfaz de escritura del capturador sólo expone `capture_write_en` y
 `capture_write_addr[31:0]`. En la dirección sólo los bits 11:0 pueden variar;
 los demás son cero porque el generador BRAM exige un puerto de 32 bits.
 `capture_write_en` habilita el puerto B y sus cuatro bytes de escritura.
-`tone_out_TDATA` llega directamente a `dinb`; los puertos de lectura
+`tone_out_TDATA` y `noise_out_TDATA` llegan directamente a sus respectivos
+puertos `dinb`; los puertos de lectura
 pertenecen al controlador AXI BRAM.
 
 Vivado confundía los nombres anteriores de los puertos RTL con interfaces del
@@ -106,7 +113,8 @@ adicionales. Los puertos del helper se renombraron y se anotaron con
 `X_INTERFACE_IGNORE = "true"`, mecanismo documentado por
 [AMD UG994](https://docs.amd.com/r/2022.1-English/ug994-vivado-ip-subsystems/List-of-Supported-X_-Attributes?contentId=jpcM0W5nwj5Rmx~pVIALuA).
 El `system.bd` regenerado ya contiene sólo ocho puertos escalares/vectoriales
-en `tone_capture_0` y ninguna interfaz inferida para ese módulo.
+en cada una de las instancias `tone_capture_0` y `gaussian_capture_0`, sin
+interfaces inferidas.
 
 ### Paquete que usa Vivado
 
@@ -147,15 +155,18 @@ es la que debe usar Linux; se comprobó en el `system.bd` generado.
 | --- | --- | --- | --- |
 | SYSID | `0x45000000` | `0x85000000` | 64 KiB |
 | `jam_tone_0` | `0x47000000` | `0x87000000` | 64 KiB |
-| BRAM de captura | `0x47010000` | `0x87010000` | 4 KiB |
-| GPIO de captura | `0x47020000` | `0x87020000` | 4 KiB |
+| BRAM tono | `0x47010000` | `0x87010000` | 4 KiB |
+| GPIO tono | `0x47020000` | `0x87020000` | 4 KiB |
+| `jam_gaussian_0` | `0x47030000` | `0x87030000` | 64 KiB |
+| BRAM ruido | `0x47040000` | `0x87040000` | 4 KiB |
+| GPIO ruido | `0x47050000` | `0x87050000` | 4 KiB |
 | AD9361 0 | `0x79020000` | `0x99020000` | 64 KiB |
 | AD9361 1 | `0x79040000` | `0x99040000` | 64 KiB |
-| DMA ADC | `0x7C400000` | `0x9C400000` | 64 KiB |
-| DMA DAC | `0x7C420000` | `0x9C420000` | 64 KiB |
+| DMA ADC | `0x7C400000` | `0x9C400000` | 4 KiB |
+| DMA DAC | `0x7C420000` | `0x9C420000` | 4 KiB |
 
 Los rangos no se solapan. IRQ existentes: DAC DMA `ps-12`, ADC DMA `ps-13`;
-nueva IRQ tono `ps-14`.
+nuevas IRQ tono `ps-14` y ruido `ps-15`.
 
 ### Registros y secuencia
 
@@ -217,12 +228,14 @@ la fase inicial propagada. La frecuencia nominal es
 | Archivo | Función |
 | --- | --- |
 | `zcu102/system_bd.tcl` | Añade generador, GPIO, capturador y BRAM; conserva el bloque común de FMCOMMS5. |
-| `zcu102/Makefile` | Declara `tone_capture.v` y selecciona validación BD por defecto o build completo con `GNSS_FULL_BUILD=1`. |
+| `zcu102/Makefile` | Declara `stream_capture.v` y selecciona validación BD por defecto o build completo con `GNSS_FULL_BUILD=1`. |
 | `zcu102/system_project.tcl` | Omite síntesis salvo que `GNSS_FULL_BUILD=1`; conserva el ajuste de retardos para el build completo. |
-| `zcu102/tone_capture.v` | Cuenta transferencias, escribe BRAM y publica estado. |
-| `zcu102/tb_tone_capture.sv` | Test focalizado de orden, longitud, contrapresión, errores y rearme. |
+| `zcu102/stream_capture.v` | Capturador compartido por tono y ruido; cuenta transferencias, escribe BRAM y publica estado. |
+| `zcu102/tb_stream_capture.sv` | Test focalizado de orden, longitud, contrapresión, errores y rearme. |
 | `zcu102/check_tone_package.tcl` | Comprueba VLNV y puertos en XCZU9EG sin síntesis. |
+| `zcu102/check_gaussian_package.tcl` | Comprueba VLNV y puertos del ruido en XCZU9EG sin síntesis. |
 | `zcu102/capture_tone.py` | Procedimiento de control y lectura Linux; pendiente de prueba en placa. |
+| `zcu102/capture_gaussian.py` | Control y lectura Linux del ruido; pendiente de prueba en placa. |
 
 Comandos de esta etapa desde la raíz:
 
@@ -231,24 +244,24 @@ make -n gnss_arraysim.zcu102
 cd /tmp
 /tools/Xilinx/Vivado/2022.2/bin/vivado -mode batch \
   -source /home/clara/fpga/git/ad_hdl_custom/projects/gnss_arraysim/zcu102/check_tone_package.tcl
-cd /home/clara/fpga/git/ad_hdl_custom/projects/gnss_arraysim/zcu102
-mkdir -p gnss_tone_validation7
-ADI_PROJECT_DIR=gnss_tone_validation7/ ADI_SKIP_SYNTHESIS=1 \
-  /tools/Xilinx/Vivado/2022.2/bin/vivado -mode batch -source system_project.tcl \
-  -log gnss_tone_validation7/vivado.log -journal gnss_tone_validation7/vivado.jou
+/tools/Xilinx/Vivado/2022.2/bin/vivado -mode batch \
+  -source /home/clara/fpga/git/ad_hdl_custom/projects/gnss_arraysim/zcu102/check_gaussian_package.tcl
+cd /home/clara/fpga/git/ad_hdl_custom
+PATH="/tools/Xilinx/Vivado/2022.2/bin:$PATH" make gnss_arraysim.zcu102
 cd /tmp
 /tools/Xilinx/Vivado/2022.2/bin/xvlog -sv \
-  /home/clara/fpga/git/ad_hdl_custom/projects/gnss_arraysim/zcu102/tone_capture.v \
-  /home/clara/fpga/git/ad_hdl_custom/projects/gnss_arraysim/zcu102/tb_tone_capture.sv
-/tools/Xilinx/Vivado/2022.2/bin/xelab tb_tone_capture -s tb_tone_capture_sim
-/tools/Xilinx/Vivado/2022.2/bin/xsim tb_tone_capture_sim -runall
+  /home/clara/fpga/git/ad_hdl_custom/projects/gnss_arraysim/zcu102/stream_capture.v \
+  /home/clara/fpga/git/ad_hdl_custom/projects/gnss_arraysim/zcu102/tb_stream_capture.sv
+/tools/Xilinx/Vivado/2022.2/bin/xelab tb_stream_capture -s tb_stream_capture_sim
+/tools/Xilinx/Vivado/2022.2/bin/xsim tb_stream_capture_sim -runall
 ```
 
-`make -n` terminó con código 0 en esta etapa. La prueba del paquete terminó
-con código 0 y mostró el VLNV y puertos esperados. La simulación XSim del
+`make -n` terminó con código 0 en esta etapa. La comprobación propia del
+paquete gaussiano terminó con código 0 y mostró el VLNV y puertos esperados;
+la prueba del paquete de tono corresponde a la etapa anterior. La simulación XSim del
 capturador pasó (1024 palabras, orden, pausa, backpressure, longitudes inválidas
 y rearme). La validación de `system.bd` en Vivado 2022.2 terminó con código 0,
-sin síntesis, en un directorio nuevo para conservar el build anterior. Emitió
+sin síntesis, en `gnss_bd_validation/`, separado del build completo. Emitió
 una advertencia de ancho al unir `bram_addr_a` de 12 bits con `addra` de 32:
 el wrapper generado extiende con ceros los bits superiores. La memoria generada
 usa puertos de 32 bits y un segmento AXI de 4 KiB. La advertencia crítica sobre
@@ -278,6 +291,80 @@ La dirección BRAM sigue el formato de byte del controlador: para 32 bits y
 El usuario informó que, tras resolver la licencia, `make gnss_arraysim.zcu102`
 terminó en `OK` con `ADI_MAX_OOC_JOBS=1` **antes** de esta integración digital.
 No hemos repetido ese build completo con los cambios actuales.
+
+### Ruido gaussiano: paquete, control y lectura
+
+La IP que carga Vivado está en `library/gnss_arraysim/jam_gaussian_loop/` y
+tiene VLNV `xilinx.com:hls:jam_gaussian_loop:1.0`. Se inspeccionaron su
+`component.xml`, RTL empaquetado y
+`drivers/jam_gaussian_loop_v1_0/src/xjam_gaussian_loop_hw.h`. Ofrece
+`s_axi_control`, `ap_clk`, `ap_rst_n`, `interrupt` y AXI4-Stream `noise_out`
+con `TDATA[31:0]`, `TVALID` y `TREADY`, sin `TLAST`. El RTL empaqueta
+`{Q[15:0], I[15:0]}`; cada componente tiene signo Q2.14. El regslice HLS
+propaga `TREADY` y el pipeline se bloquea con contrapresión. El capturador
+termina por conteo de transferencias aceptadas.
+
+Su ZIP original es
+`gnss_arraysim_hdl/ip_cores/jam_gaussian_gen/ip_packages/jam_gaussian_ip.zip`,
+SHA-256 `f1a8f3abf8176e0467bcc02e57a4926bbb8cf8780c637694b840f7e5e024d83d`.
+El RTL principal importado coincide byte a byte con el ZIP. Las fuentes HLS
+externas no tenían un diff local en `src/` durante esta inspección (HEAD
+`ceee7f83f3c973e21c9bb5d50df1cd2ee5c070a2`); los productos HLS y el ZIP
+eran archivos sin seguimiento. Sus metadatos indican HLS 2022.2 para
+`xczu7eg-ffvc1156-2-e`. `check_gaussian_package.tcl` instanció el VLNV en
+XCZU9EG y el Block Design completo validó. Siguen pendientes la síntesis,
+timing y prueba física en ZCU102. No se modificó ni reexportó el paquete.
+
+Registros relativos a `0x87030000`: control HLS `0x00` (`ap_start` bit 0,
+`ap_done` bit 1 clear-on-read, `ap_idle` bit 2, `ap_ready` bit 3,
+`auto_restart` bit 7), GIE `0x04`, IER `0x08`, ISR `0x0c`, `n_samples` `0x10`
+(32 bits), `amplitude` `0x18` (16 bits con signo Q2.14) y `seed` `0x20` (32
+bits). Una semilla no nula reinicia los dos LFSR; `seed=0` continúa los estados
+persistentes. El código HLS transforma los uniformes con Box–Muller y escala
+I/Q por `amplitude / sqrt(2)`. La misma longitud se programa en HLS y en el
+capturador (1–1024); `auto_restart=0`.
+
+El GPIO de ruido está en `0x87050000`: canal 1 DATA `0x00`, TRI `0x04`;
+canal 2 DATA `0x08`, TRI `0x0c`. Tiene exactamente el mismo formato de control
+y estado que el GPIO de tono descrito arriba. Orden: comprobar `ap_idle`,
+configurar longitud, amplitud y semilla; armar el capturador con ARM 0→1→0;
+verificar BUSY; escribir `ap_start=1`; esperar DONE y comprobar contador y
+errores; leer `0x87040000 + 4 × índice`; rearmar sólo tras BUSY=0. Los datos
+se guardan en una BRAM independiente de 1024 palabras. La IRQ del generador
+está en `ps-15`; el software de ejemplo consulta el estado GPIO.
+
+```bash
+sudo python3 projects/gnss_arraysim/zcu102/capture_gaussian.py \
+  --samples 1024 --amplitude-raw 4096 --seed 0x12345678 \
+  --output gaussian_capture.csv
+```
+
+`capture_gaussian.py` usa `/dev/mem` y produce CSV de palabras, I/Q enteros y
+Q2.14; imprime media I/Q, RMS complejo y correlación compleja de retardo 1.
+Hace falta un bitstream nuevo con esta integración, Linux con acceso al mapa
+PL y permisos de `/dev/mem` (o un driver/UIO futuro). No se ha ejecutado en
+placa. Para una comprobación independiente, repetir dos capturas con la misma
+semilla no nula y comparar sus 1024 palabras; calcular media, potencia,
+correlación y distribución desde el CSV con otro programa. Como referencia
+teórica, con amplitud pequeña que evite desbordamiento, I y Q deberían tener
+media próxima a cero, desviación típica próxima a `|amplitude|/sqrt(2)` y RMS
+complejo próximo a `|amplitude|`. Son pruebas estadísticas, no garantías de una
+ráfaga de 1024 muestras. El repositorio externo documenta fallos previos en
+pruebas de correlación del generador gaussiano; la calidad estadística no queda
+validada por la integración del Block Design.
+
+Comprobaciones propias: `check_gaussian_package.tcl`, XSim del capturador
+compartido, `make -n gnss_arraysim.zcu102` y `make gnss_arraysim.zcu102` con
+Vivado 2022.2 terminaron con código 0. El último generó el `.xpr`, validó
+`system.bd` y registró `Skipping synthesis`. Las dos instancias de
+`stream_capture` muestran sólo ocho puertos RTL y cero interfaces inferidas.
+El mapa generado contiene tono `0x87000000/0x87010000/0x87020000` y ruido
+`0x87030000/0x87040000/0x87050000`, sin solapamientos, y conserva los dos
+DMA de FMCOMMS5. La advertencia de ancho 12→32 bits en el puerto A de cada
+BRAM extiende los bits superiores con cero en el wrapper generado. La
+advertencia del Tcl Store local procede de permisos del entorno. No se han
+ejecutado síntesis, implementación, bitstream ni prueba en placa de esta
+revisión.
 
 ## Direcciones AXI del diseño base (históricas)
 

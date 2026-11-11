@@ -1,8 +1,8 @@
-// Finite, handshake-counted AXI-Stream capture for the jam_tone_loop trial.
+// Finite, handshake-counted AXI-Stream capture for either GNSS generator.
 // One accepted 32-bit I/Q sample is written to one BRAM word.
 `timescale 1ns/1ps
 
-module tone_capture (
+module stream_capture (
   input  wire        clk,
   input  wire        resetn,
   input  wire [31:0] control,
@@ -10,8 +10,8 @@ module tone_capture (
 
   // Keep these scalar pins visible in IPI. The ADI interface catalogue has
   // generic VALID/EN/ADDR roles that otherwise create incomplete bus groups.
-  (* X_INTERFACE_IGNORE = "true" *) input  wire        tone_valid,
-  (* X_INTERFACE_IGNORE = "true" *) output wire        tone_ready,
+  (* X_INTERFACE_IGNORE = "true" *) input  wire        sample_valid,
+  (* X_INTERFACE_IGNORE = "true" *) output wire        sample_ready,
 
   (* X_INTERFACE_IGNORE = "true" *) output wire        capture_write_en,
   (* X_INTERFACE_IGNORE = "true" *) output wire [31:0] capture_write_addr
@@ -29,11 +29,11 @@ module tone_capture (
 
   wire arm_rise = control[0] && !arm_previous;
   wire [10:0] new_length = control[26:16];
-  wire transfer = tone_valid && tone_ready;
+  wire transfer = sample_valid && sample_ready;
 
   // A full or unarmed capture backpressures the producer. Pause allows the
   // same behavior to be exercised in the middle of a burst.
-  assign tone_ready = busy && !control[1] && (captured_count < requested_length);
+  assign sample_ready = busy && !control[1] && (captured_count < requested_length);
 
   // Port B of the true dual-port BRAM is a synchronous write port. On a
   // transfer edge the BRAM sees the old captured_count (the next free word).
@@ -42,7 +42,7 @@ module tone_capture (
   // its word-aligned addresses so PS offset 4*n reads captured sample n.
   assign capture_write_addr = {20'd0, captured_count[9:0], 2'b00};
 
-  assign status = {16'd0, tone_ready, rearm_while_busy,
+  assign status = {16'd0, sample_ready, rearm_while_busy,
                    invalid_length, busy, done, captured_count};
 
   always @(posedge clk) begin
