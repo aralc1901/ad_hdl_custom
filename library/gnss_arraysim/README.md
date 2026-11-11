@@ -22,7 +22,7 @@ El paquete ArrayGen seleccionado es para `xczu9eg-ffvb1156-2-e`, la parte ZCU102
 Los scripts de exportación de PRN, tono y ruido apuntan a `xczu7eg`; su
 compatibilidad de síntesis para ZCU102 no está demostrada. El paquete gaussiano
 tiene fallos estadísticos documentados en el repositorio de origen. Tono y
-ruido ya están instanciados para capturas digitales independientes en ZCU102;
-PRN y ArrayGen siguen sólo en el catálogo. El paquete gaussiano no se ha
+ruido y PRN ya están instanciados para capturas digitales independientes en ZCU102;
+ArrayGen sigue sólo en el catálogo. Los paquetes no se han
 modificado ni reexportado; se validó su instanciación IPI para XCZU9EG, pero
-siguen pendientes síntesis, timing y comprobación estadística en placa.
+siguen pendientes síntesis, timing y comprobación funcional en placa.

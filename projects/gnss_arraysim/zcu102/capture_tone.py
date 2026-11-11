@@ -20,10 +20,10 @@ PAGE_SIZE = 4096
 
 
 class Window:
-    def __init__(self, fd, base):
+    def __init__(self, fd, base, size=PAGE_SIZE):
         page_base = base & ~(PAGE_SIZE - 1)
         self.bias = base - page_base
-        self.mapping = mmap.mmap(fd, PAGE_SIZE + self.bias, offset=page_base)
+        self.mapping = mmap.mmap(fd, size + self.bias, offset=page_base)
 
     def read(self, offset):
         return struct.unpack_from("<I", self.mapping, self.bias + offset)[0]

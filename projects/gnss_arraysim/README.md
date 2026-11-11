@@ -30,8 +30,9 @@ el árbol completo sea coherente; la integración de las IP GNSS se hará sólo 
 
 Los cuatro paquetes HLS completos, sus hashes y advertencias de procedencia
 están en [`../../library/gnss_arraysim/README.md`](../../library/gnss_arraysim/README.md).
-Las pruebas digitales de `jam_tone_loop` y `jam_gaussian_loop` se describen
-abajo. PRN y ArrayGen siguen disponibles en el catálogo, sin instancias.
+Las pruebas digitales de `jam_tone_loop`, `jam_gaussian_loop` y
+`gnss_prn_loop` se describen abajo. ArrayGen sigue disponible en el catálogo,
+sin instancia.
 
 ## Compilación: validación por defecto
 
@@ -73,7 +74,7 @@ satisfactorio y mensaje `Skipping synthesis` en
 directorio. **El build completo con el flag no se ha ejecutado**; queda a
 decisión del usuario.
 
-## Capturas digitales: tono y ruido a BRAM
+## Capturas digitales: tono, ruido y PRN a BRAM
 
 ```text
 PS AXI ──┬── AXI4-Lite jam_tone_loop ── tone_out ── capturador T ── BRAM T puerto B
@@ -81,7 +82,10 @@ PS AXI ──┬── AXI4-Lite jam_tone_loop ── tone_out ── capturador
          ├── AXI BRAM Controller T ── BRAM T puerto A ── PS/Linux
          ├── AXI4-Lite jam_gaussian_loop ── noise_out ── capturador G ── BRAM G puerto B
          ├── GPIO G (armado/estado) ─────────────────────────────────┘
-         └── AXI BRAM Controller G ── BRAM G puerto A ── PS/Linux
+         ├── AXI BRAM Controller G ── BRAM G puerto A ── PS/Linux
+         ├── AXI4-Lite gnss_prn_loop (RAM chips) ── prn_out ── capturador P ── BRAM P puerto B
+         ├── GPIO P (armado/estado) ──────────────────────────────────────────┘
+         └── AXI BRAM Controller P ── BRAM P puerto A ── PS/Linux
 
 FMCOMMS5: 2 × AD9361 ↔ FIFO de radio ↔ DMA ADC y DMA DAC (sin cambios)
 ```
@@ -93,14 +97,15 @@ el límite es el contador de transferencias aceptadas. `TREADY` baja antes de
 armar, durante pausa y después de completar. Los generadores, GPIO,
 capturadores, BRAM B y controladores AXI BRAM usan `sys_cpu_clk` (100 MHz); reset
 activo bajo `sys_cpu_resetn`. Se conecta `interrupt` del tono a `ps-14`; la
-captura se consulta por estado GPIO. El ruido usa `ps-15`. No hay salida RF ni
-ArrayGen en esta etapa.
+captura se consulta por estado GPIO. Ruido y PRN comparten `ps-15` a través
+de una OR; las fuentes se distinguen mediante sus ISR HLS si se habilitan las
+IRQ. No hay salida RF ni ArrayGen en esta etapa.
 
 La interfaz de escritura del capturador sólo expone `capture_write_en` y
 `capture_write_addr[31:0]`. En la dirección sólo los bits 11:0 pueden variar;
 los demás son cero porque el generador BRAM exige un puerto de 32 bits.
 `capture_write_en` habilita el puerto B y sus cuatro bytes de escritura.
-`tone_out_TDATA` y `noise_out_TDATA` llegan directamente a sus respectivos
+`tone_out_TDATA`, `noise_out_TDATA` y `prn_out_TDATA` llegan directamente a sus respectivos
 puertos `dinb`; los puertos de lectura
 pertenecen al controlador AXI BRAM.
 
@@ -113,8 +118,8 @@ adicionales. Los puertos del helper se renombraron y se anotaron con
 `X_INTERFACE_IGNORE = "true"`, mecanismo documentado por
 [AMD UG994](https://docs.amd.com/r/2022.1-English/ug994-vivado-ip-subsystems/List-of-Supported-X_-Attributes?contentId=jpcM0W5nwj5Rmx~pVIALuA).
 El `system.bd` regenerado ya contiene sólo ocho puertos escalares/vectoriales
-en cada una de las instancias `tone_capture_0` y `gaussian_capture_0`, sin
-interfaces inferidas.
+en cada una de las instancias `tone_capture_0`, `gaussian_capture_0` y
+`prn_capture_0`, sin interfaces inferidas.
 
 ### Paquete que usa Vivado
 
@@ -160,13 +165,16 @@ es la que debe usar Linux; se comprobó en el `system.bd` generado.
 | `jam_gaussian_0` | `0x47030000` | `0x87030000` | 64 KiB |
 | BRAM ruido | `0x47040000` | `0x87040000` | 4 KiB |
 | GPIO ruido | `0x47050000` | `0x87050000` | 4 KiB |
+| `gnss_prn_0` (incluye RAM de chips) | `0x47060000` | `0x87060000` | 64 KiB |
+| BRAM PRN | `0x47070000` | `0x87070000` | 4 KiB |
+| GPIO PRN | `0x47080000` | `0x87080000` | 4 KiB |
 | AD9361 0 | `0x79020000` | `0x99020000` | 64 KiB |
 | AD9361 1 | `0x79040000` | `0x99040000` | 64 KiB |
 | DMA ADC | `0x7C400000` | `0x9C400000` | 4 KiB |
 | DMA DAC | `0x7C420000` | `0x9C420000` | 4 KiB |
 
 Los rangos no se solapan. IRQ existentes: DAC DMA `ps-12`, ADC DMA `ps-13`;
-nuevas IRQ tono `ps-14` y ruido `ps-15`.
+nuevas IRQ tono `ps-14` y ruido/PRN compartida `ps-15`.
 
 ### Registros y secuencia
 
@@ -234,8 +242,10 @@ la fase inicial propagada. La frecuencia nominal es
 | `zcu102/tb_stream_capture.sv` | Test focalizado de orden, longitud, contrapresión, errores y rearme. |
 | `zcu102/check_tone_package.tcl` | Comprueba VLNV y puertos en XCZU9EG sin síntesis. |
 | `zcu102/check_gaussian_package.tcl` | Comprueba VLNV y puertos del ruido en XCZU9EG sin síntesis. |
-| `zcu102/capture_tone.py` | Procedimiento de control y lectura Linux; pendiente de prueba en placa. |
+| `zcu102/check_prn_package.tcl` | Comprueba VLNV y puertos del PRN en XCZU9EG sin síntesis. |
+| `zcu102/capture_tone.py` | Procedimiento de control y lectura Linux; `Window` admite tamaño de mapa para acceder a la RAM interna PRN; pendiente de prueba en placa. |
 | `zcu102/capture_gaussian.py` | Control y lectura Linux del ruido; pendiente de prueba en placa. |
+| `zcu102/capture_prn.py` | Carga chips por AXI-Lite, configura el PRN y guarda la captura desde Linux; pendiente de prueba en placa. |
 
 Comandos de esta etapa desde la raíz:
 
@@ -246,6 +256,8 @@ cd /tmp
   -source /home/clara/fpga/git/ad_hdl_custom/projects/gnss_arraysim/zcu102/check_tone_package.tcl
 /tools/Xilinx/Vivado/2022.2/bin/vivado -mode batch \
   -source /home/clara/fpga/git/ad_hdl_custom/projects/gnss_arraysim/zcu102/check_gaussian_package.tcl
+/tools/Xilinx/Vivado/2022.2/bin/vivado -mode batch \
+  -source /home/clara/fpga/git/ad_hdl_custom/projects/gnss_arraysim/zcu102/check_prn_package.tcl
 cd /home/clara/fpga/git/ad_hdl_custom
 PATH="/tools/Xilinx/Vivado/2022.2/bin:$PATH" make gnss_arraysim.zcu102
 cd /tmp
@@ -365,6 +377,99 @@ BRAM extiende los bits superiores con cero en el wrapper generado. La
 advertencia del Tcl Store local procede de permisos del entorno. No se han
 ejecutado síntesis, implementación, bitstream ni prueba en placa de esta
 revisión.
+
+### PRN: paquete, memoria de chips y captura
+
+El paquete realmente cargado está en `library/gnss_arraysim/gnss_prn_loop/`,
+VLNV `xilinx.com:hls:gnss_prn_loop:1.0`. Se revisaron `component.xml`, RTL
+empaquetado y `drivers/gnss_prn_loop_v1_0/src/xgnss_prn_loop_hw.h`.
+Tiene AXI4-Lite `s_axi_control`, `ap_clk`, `ap_rst_n`, `interrupt` y
+AXI4-Stream `prn_out` (`TDATA[31:0]`, `TVALID`, `TREADY`), sin `TLAST`.
+El RTL empaqueta `{Q[15:0], I[15:0]}` Q2.14 con signo. El regslice HLS
+propaga backpressure; `stream_capture` sólo escribe con `TVALID && TREADY`
+y termina por conteo explícito de hasta 1024 muestras.
+
+ZIP de origen: `gnss_arraysim_hdl/ip_cores/gnss_prn_gen/ip_packages/gnss_prn_ip.zip`,
+SHA-256 `67855d77884d6149f170ead763263a14202f57a843097467321d7fc0914d6bcf`.
+El RTL principal importado y el del ZIP tienen el mismo SHA-256:
+`b3657128fa6eea603db0e98f2219bd90c4a808fa72321c7c38506663500a1291`.
+Las fuentes HLS `src/` no presentaban cambios locales al inspeccionarlas;
+el ZIP era un archivo sin seguimiento en el repositorio externo. El RTL fue
+exportado con Vitis HLS 2022.2 para `xczu7eg-ffvc1156-2-e`.
+`check_prn_package.tcl` instanció el VLNV en `xczu9eg-ffvb1156-2-e` (ZCU102).
+Esto confirma compatibilidad de catálogo e IPI, pero no síntesis ni timing
+para la nueva parte. No se modificó ni reexportó el paquete.
+
+Registros relativos a `0x87060000`:
+
+| Offset | Registro | Formato |
+| --- | --- | --- |
+| `0x00` | HLS AP_CTRL | `ap_start` bit 0, `ap_done` bit 1 clear-on-read, `ap_idle` bit 2, `ap_ready` bit 3, `auto_restart` bit 7 |
+| `0x04/0x08/0x0c` | GIE/IER/ISR | Interrupciones HLS |
+| `0x10` | `n_samples` | `uint32`, igual que longitud del capturador |
+| `0x18` | `prn_length` | `uint32`, 1–4096 chips cargados |
+| `0x20` | `sample_step` | IEEE-754 `float32`, chips por muestra |
+| `0x28` | `prn_phase_init` | IEEE-754 `float32`, fase de código inicial en chips |
+| `0x30` | `doppler_freq` | IEEE-754 `float32`, Hz |
+| `0x38` | `carrier_phase_init` | IEEE-754 `float32`, radianes |
+| `0x40` | `fs` | IEEE-754 `float32`, Hz del cálculo HLS |
+| `0x2000–0x3fff` | `prn_mem` | 4096 chips de 16 bits; dos por palabra de 32 bits |
+
+Cada chip contiene I y Q de 8 bits con signo. El RTL lee I de bits 7:0 y Q
+de 15:8; los chips par/impar ocupan bits 15:0/31:16 de una palabra AXI.
+El PS carga esta RAM interna antes de arrancar; es independiente de la BRAM
+de captura. Los registros de fase inicial sólo se aplican en la primera
+ejecución tras reset PL; el estado de código y portadora persiste entre
+llamadas. `fs` es un parámetro del algoritmo, no cambia el reloj físico
+`sys_cpu_clk` de 100 MHz.
+
+El GPIO PRN `0x87080000` tiene los mismos offsets y bits de armado, pausa y
+estado que los GPIO de tono y ruido. La BRAM de lectura está en `0x87070000`
+con 1024 palabras de 32 bits. Orden: comprobar `ap_idle=1`, cargar chips y
+parámetros, armar 0→1→0 y verificar BUSY, escribir `ap_start=1`, esperar DONE
+y contador exacto, leer BRAM y rearmar sólo cuando BUSY=0. `auto_restart=0`.
+La IRQ PRN se combina con la gaussiana en `ps-15`; si se usan interrupciones,
+el software debe consultar los ISR de ambas IP para identificar la fuente.
+El script de ejemplo consulta el GPIO. Si HLS produce más muestras que las
+capturadas, puede bloquearse en `TREADY=0` y requerir reset PL.
+
+`capture_prn.py` recibe un CSV sin cabecera con dos enteros I,Q de −128 a 127
+por fila. El usuario proporciona el código PRN; el ejemplo no presupone una
+secuencia GNSS concreta. Con `chips.csv` preparado:
+
+```bash
+sudo python3 projects/gnss_arraysim/zcu102/capture_prn.py \
+  --chips-csv chips.csv --samples 1024 --sample-step 0.5 \
+  --doppler-hz 1000 --fs-hz 100000000 --output prn_capture.csv
+```
+
+El CSV resultante contiene palabra hexadecimal, I/Q enteros y Q2.14.
+Hace falta bitstream nuevo, mapa PL accesible y permisos de `/dev/mem` o un
+driver/UIO equivalente. No se ha probado en placa. Para comparar contra una
+referencia independiente, cargar una secuencia corta conocida, usar fases
+iniciales y Doppler cero tras reset PL, y contrastar el chip
+`floor(n × sample_step) mod prn_length` con la muestra `chip/127` cuantizada
+a Q2.14. Con Doppler distinto de cero, comparar contra la rotación
+`exp(j 2π n doppler_freq/fs)` y comprobar frecuencia y continuidad de fase.
+La aritmética `float32` y la cuantización HLS pueden diferir en LSB; la
+tolerancia experimental y la prueba física siguen pendientes.
+
+Comprobaciones propias para PRN: `check_prn_package.tcl` terminó con código 0
+y mostró el VLNV y los puertos esperados para XCZU9EG; `make -n` y
+`PATH=/tools/Xilinx/Vivado/2022.2/bin:$PATH make gnss_arraysim.zcu102`
+terminaron con código 0. El último generó el `.xpr`, validó `system.bd` y
+registró `Skipping synthesis`. El BD contiene los tres capturadores con ocho
+puertos RTL cada uno y sin interfaces inferidas. El mapa PS generado muestra
+PRN `0x87060000`, BRAM `0x87070000`, GPIO `0x87080000`, sin solapamientos y
+conservando los dos DMA FMCOMMS5. La OR de interrupciones llega a
+`sys_concat_intc_1/In7` (`ps-15`). Las advertencias de ancho del puerto A de
+las tres BRAM producen extensión a cero de los bits superiores en el wrapper.
+Quedan pendientes síntesis, implementación, bitstream, timing, prueba Linux y
+comprobación de calidad de la secuencia PRN.
+El script pasó `--help`; una prueba Python comprobó lectura de CSV, empaquetado
+de chips pares/impares (también longitud impar) y codificación IEEE-754. El
+script de tono siguió pasando `--help` tras ampliar `Window` a 16 KiB para
+el mapa de control PRN; su valor predeterminado sigue siendo 4 KiB.
 
 ## Direcciones AXI del diseño base (históricas)
 

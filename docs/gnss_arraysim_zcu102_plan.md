@@ -1,13 +1,13 @@
 # Plan: proyecto GNSS ArraySim para FMCOMMS5 y ZCU102
 
 Fecha inicial: 2026-11-07. Actualización: 2026-11-11. Estado: esqueleto y
-catálogo completados; capturas digitales independientes de tono y ruido
-gaussiano implementadas y validadas en Block Design y simulación del
+catálogo completados; capturas digitales independientes de tono, ruido
+gaussiano y PRN implementadas en Block Design y simulación del
 capturador. Síntesis e implementación de esta revisión pendientes.
 
 > Las secciones de inventario y decisiones pendientes conservan el contexto
-> histórico. Tras la prueba de `jam_tone_loop`, la etapa actual añade
-> `jam_gaussian_loop` → captura digital finita en otra BRAM, manteniendo
+> histórico. Tras las pruebas de tono y ruido, la etapa actual añade
+> `gnss_prn_loop` → captura digital finita en otra BRAM, manteniendo
 > FMCOMMS5 y ambos DMA. La
 > arquitectura, mapa, registros y uso desde Linux están en
 > [`../projects/gnss_arraysim/README.md`](../projects/gnss_arraysim/README.md).
@@ -89,7 +89,9 @@ Los límites se ajustarán a lo que revele el inventario:
    `jam_tone_loop` con BRAM, simulación y documentación; sin ArrayGen ni RF.
 5. `projects: add GNSS Gaussian digital capture on ZCU102` — segunda prueba
    digital, con capturador compartido, BRAM independiente y acceso desde PS.
-6. Integración de ArrayGen, ruta RF y validación física — etapas posteriores.
+6. `projects: add GNSS PRN digital capture on ZCU102` — tercera prueba
+   digital, con carga de chips por AXI-Lite y BRAM independiente.
+7. Integración de ArrayGen, ruta RF y validación física — etapas posteriores.
 
 No se harán `git push`.
 
@@ -285,3 +287,29 @@ direcciones AXI o IRQ, pues dependerán de la arquitectura elegida.
   estadística del ruido; la documentación externa informa fallos previos de
   correlación. Se conservaron sin tocar los diez borrados locales del usuario
   en ZC702 y ZC706. No hubo push.
+- 2026-11-11: se revisó el paquete PRN importado antes de editar: VLNV
+  `xilinx.com:hls:gnss_prn_loop:1.0`, AXI4-Lite con RAM interna de chips en
+  offsets `0x2000–0x3fff`, `prn_out` AXI4-Stream de 32 bits sin TLAST,
+  `ap_clk`, `ap_rst_n` e IRQ. I ocupa bits 15:0 y Q 31:16, Q2.14 con signo.
+  Cada palabra de RAM contiene dos chips de 16 bits; en cada chip I ocupa el
+  byte bajo y Q el alto. El ZIP del origen tiene SHA-256
+  `67855d77884d6149f170ead763263a14202f57a843097467321d7fc0914d6bcf`
+  y el RTL principal coincide con el importado. El paquete fue exportado
+  para XCZU7EG; Vivado 2022.2 lo instanció para XCZU9EG en un proyecto en
+  memoria, sin comprobar síntesis ni timing. No se modificó ni reexportó.
+- 2026-11-11: se añadió captura digital PRN independiente con el módulo
+  `stream_capture`, BRAM y GPIO propios, y carga de chips desde PS por el
+  AXI-Lite HLS. Direcciones PS: PRN `0x87060000`, BRAM `0x87070000`, GPIO
+  `0x87080000`. La primera validación BD detectó que `ps-16` no existe:
+  ZCU102 dispone de `ps-0..ps-15`. Se resolvió combinando con OR las IRQ de
+  ruido y PRN en `ps-15`; cada IP conserva su ISR. La segunda ejecución de
+  `make gnss_arraysim.zcu102` terminó con código 0, creó el `.xpr` y validó
+  el BD sin síntesis. El mapa generado conserva ambas DMA y muestra ocho
+  puertos reales, sin interfaces inferidas, en los tres capturadores.
+  `make -n` y la comprobación de paquete PRN también pasaron. El script Linux
+  `capture_prn.py` carga un CSV de chips y extrae 1024 muestras; pasó `--help`,
+  y una prueba Python comprobó empaquetado de chips y parámetros `float32`,
+  pero no se ha ejecutado en placa. `capture_tone.py` sólo amplió la clase
+  `Window` para admitir un mapa PRN de 16 KiB. Quedan pendientes build completo, timing,
+  bitstream, prueba física y referencia funcional PRN. Los diez borrados
+  locales del usuario en ZC702/ZC706 se mantuvieron al margen.

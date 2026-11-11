@@ -72,7 +72,6 @@ create_bd_cell -type ip -vlnv xilinx.com:hls:jam_gaussian_loop:1.0 jam_gaussian_
 ad_connect $sys_cpu_clk jam_gaussian_0/ap_clk
 ad_connect $sys_cpu_resetn jam_gaussian_0/ap_rst_n
 ad_cpu_interconnect 0x47030000 jam_gaussian_0
-ad_cpu_interrupt ps-15 mb-15 jam_gaussian_0/interrupt
 
 create_bd_cell -type module -reference stream_capture gaussian_capture_0
 ad_connect $sys_cpu_clk gaussian_capture_0/clk
@@ -107,3 +106,53 @@ ad_connect gaussian_capture_0/capture_write_en gaussian_capture_bram/web
 ad_connect gaussian_capture_0/capture_write_addr gaussian_capture_bram/addrb
 ad_connect jam_gaussian_0/noise_out_TDATA gaussian_capture_bram/dinb
 ad_cpu_interconnect 0x47040000 gaussian_capture_axi_bram
+
+# Independent PRN capture. The chip RAM lives inside the HLS AXI-Lite window
+# and is loaded by the PS before starting the generator.
+create_bd_cell -type ip -vlnv xilinx.com:hls:gnss_prn_loop:1.0 gnss_prn_0
+ad_connect $sys_cpu_clk gnss_prn_0/ap_clk
+ad_connect $sys_cpu_resetn gnss_prn_0/ap_rst_n
+ad_cpu_interconnect 0x47060000 gnss_prn_0
+
+# ZynqMP exposes only ps-0..ps-15. Share ps-15 with Gaussian and identify
+# the source through each HLS ISR if software enables interrupts.
+ad_ip_instance util_vector_logic gaussian_prn_irq_or [list \
+  C_OPERATION {or} \
+  C_SIZE 1]
+ad_connect jam_gaussian_0/interrupt gaussian_prn_irq_or/Op1
+ad_connect gnss_prn_0/interrupt gaussian_prn_irq_or/Op2
+ad_cpu_interrupt ps-15 mb-15 gaussian_prn_irq_or/Res
+
+create_bd_cell -type module -reference stream_capture prn_capture_0
+ad_connect $sys_cpu_clk prn_capture_0/clk
+ad_connect $sys_cpu_resetn prn_capture_0/resetn
+ad_connect gnss_prn_0/prn_out_TVALID prn_capture_0/sample_valid
+ad_connect prn_capture_0/sample_ready gnss_prn_0/prn_out_TREADY
+
+ad_ip_instance axi_gpio prn_capture_gpio
+ad_ip_parameter prn_capture_gpio CONFIG.C_IS_DUAL 1
+ad_ip_parameter prn_capture_gpio CONFIG.C_GPIO_WIDTH 32
+ad_ip_parameter prn_capture_gpio CONFIG.C_GPIO2_WIDTH 32
+ad_ip_parameter prn_capture_gpio CONFIG.C_ALL_OUTPUTS 1
+ad_ip_parameter prn_capture_gpio CONFIG.C_ALL_INPUTS_2 1
+ad_connect prn_capture_gpio/gpio_io_o prn_capture_0/control
+ad_connect prn_capture_0/status prn_capture_gpio/gpio2_io_i
+ad_cpu_interconnect 0x47080000 prn_capture_gpio
+
+ad_ip_instance axi_bram_ctrl prn_capture_axi_bram
+ad_ip_parameter prn_capture_axi_bram CONFIG.SINGLE_PORT_BRAM 1
+ad_ip_instance blk_mem_gen prn_capture_bram
+ad_ip_parameter prn_capture_bram CONFIG.Memory_Type {True_Dual_Port_RAM}
+ad_ip_parameter prn_capture_bram CONFIG.Enable_32bit_Address false
+ad_ip_parameter prn_capture_bram CONFIG.Write_Width_A 32
+ad_ip_parameter prn_capture_bram CONFIG.Read_Width_A 32
+ad_ip_parameter prn_capture_bram CONFIG.Write_Width_B 32
+ad_ip_parameter prn_capture_bram CONFIG.Read_Width_B 32
+ad_ip_parameter prn_capture_bram CONFIG.Write_Depth_A 1024
+ad_connect prn_capture_axi_bram/BRAM_PORTA prn_capture_bram/BRAM_PORTA
+ad_connect $sys_cpu_clk prn_capture_bram/clkb
+ad_connect prn_capture_0/capture_write_en prn_capture_bram/enb
+ad_connect prn_capture_0/capture_write_en prn_capture_bram/web
+ad_connect prn_capture_0/capture_write_addr prn_capture_bram/addrb
+ad_connect gnss_prn_0/prn_out_TDATA prn_capture_bram/dinb
+ad_cpu_interconnect 0x47070000 prn_capture_axi_bram
