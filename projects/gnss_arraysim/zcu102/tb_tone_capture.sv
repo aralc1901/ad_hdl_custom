@@ -7,11 +7,11 @@ module tb_tone_capture;
   reg resetn = 1'b0;
   reg [31:0] control = 32'd0;
   wire [31:0] status;
-  reg [31:0] s_axis_tdata = 32'd0;
-  reg s_axis_tvalid = 1'b0;
-  wire s_axis_tready;
-  wire bram_write;
-  wire [31:0] bram_addr;
+  reg [31:0] tone_data = 32'd0;
+  reg tone_valid = 1'b0;
+  wire tone_ready;
+  wire capture_write_en;
+  wire [31:0] capture_write_addr;
 
   reg [31:0] memory [0:1023];
   integer writes = 0;
@@ -20,16 +20,16 @@ module tb_tone_capture;
 
   tone_capture dut (
     .clk(clk), .resetn(resetn), .control(control), .status(status),
-    .s_axis_tvalid(s_axis_tvalid),
-    .s_axis_tready(s_axis_tready),
-    .bram_write(bram_write), .bram_addr(bram_addr)
+    .tone_valid(tone_valid), .tone_ready(tone_ready),
+    .capture_write_en(capture_write_en),
+    .capture_write_addr(capture_write_addr)
   );
 
   always @(posedge clk) begin
-    if (bram_write) begin
-      if (bram_addr > 4092 || bram_addr[1:0] != 2'b00)
+    if (capture_write_en) begin
+      if (capture_write_addr > 4092 || capture_write_addr[1:0] != 2'b00)
         $fatal(1, "BRAM byte address outside capacity or unaligned");
-      memory[bram_addr[11:2]] <= s_axis_tdata;
+      memory[capture_write_addr[11:2]] <= tone_data;
       writes <= writes + 1;
     end
   end
@@ -49,11 +49,11 @@ module tb_tone_capture;
 
   task automatic send_word(input [31:0] value);
     @(negedge clk);
-    s_axis_tdata = value;
-    s_axis_tvalid = 1'b1;
-    do @(posedge clk); while (!s_axis_tready);
+    tone_data = value;
+    tone_valid = 1'b1;
+    do @(posedge clk); while (!tone_ready);
     @(negedge clk);
-    s_axis_tvalid = 1'b0;
+    tone_valid = 1'b0;
   endtask
 
   initial begin
@@ -61,30 +61,30 @@ module tb_tone_capture;
     resetn = 1'b1;
 
     // A producer may assert TVALID before arming. No transfer is accepted.
-    s_axis_tdata = 32'h11112222;
-    s_axis_tvalid = 1'b1;
+    tone_data = 32'h11112222;
+    tone_valid = 1'b1;
     repeat (3) @(posedge clk);
-    check(!s_axis_tready && writes == 0, "unarmed backpressure");
+    check(!tone_ready && writes == 0, "unarmed backpressure");
     arm(11'd4);
     @(posedge clk);
     @(negedge clk);
-    s_axis_tvalid = 1'b0;
+    tone_valid = 1'b0;
     check(status[10:0] == 11'd1 && memory[0] == 32'h11112222,
           "first accepted sample");
 
     // Pause in the middle of a burst; the offered word must not be written.
     control[1] = 1'b1;
-    s_axis_tdata = 32'h33334444;
-    s_axis_tvalid = 1'b1;
+    tone_data = 32'h33334444;
+    tone_valid = 1'b1;
     old_writes = writes;
     repeat (4) @(posedge clk);
-    check(!s_axis_tready && writes == old_writes && status[10:0] == 11'd1,
+    check(!tone_ready && writes == old_writes && status[10:0] == 11'd1,
           "paused backpressure");
     @(negedge clk);
     control[1] = 1'b0;
     @(posedge clk);
     @(negedge clk);
-    s_axis_tvalid = 1'b0;
+    tone_valid = 1'b0;
     send_word(32'h55556666);
     send_word(32'h77778888);
     check(status[11] && !status[12] && status[10:0] == 11'd4,
@@ -94,18 +94,18 @@ module tb_tone_capture;
           "sample order");
 
     old_writes = writes;
-    s_axis_tvalid = 1'b1;
-    s_axis_tdata = 32'hdeaddead;
+    tone_valid = 1'b1;
+    tone_data = 32'hdeaddead;
     repeat (3) @(posedge clk);
-    check(!s_axis_tready && writes == old_writes, "full backpressure");
+    check(!tone_ready && writes == old_writes, "full backpressure");
     @(negedge clk);
-    s_axis_tvalid = 1'b0;
+    tone_valid = 1'b0;
 
     // Full capacity, including the last address and an exact count of 1024.
     arm(11'd1024);
     for (i = 0; i < 1024; i = i + 1)
       send_word(32'h80000000 | i);
-    check(status[11] && status[10:0] == 11'd1024 && !s_axis_tready,
+    check(status[11] && status[10:0] == 11'd1024 && !tone_ready,
           "1024-word completion");
     check(memory[0] == 32'h80000000 && memory[1023] == 32'h800003ff,
           "first and final BRAM address");
@@ -115,7 +115,7 @@ module tb_tone_capture;
     check(status[13] && !status[12] && !status[11] && status[10:0] == 0,
           "zero length rejected");
     arm(11'd1025);
-    check(status[13] && !s_axis_tready && status[10:0] == 0,
+    check(status[13] && !tone_ready && status[10:0] == 0,
           "over-capacity rejected");
 
     // An arm edge during capture reports an error without losing the burst.

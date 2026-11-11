@@ -236,6 +236,15 @@ direcciones AXI o IRQ, pues dependerán de la arquitectura elegida.
   validación del Block Design pasaron de nuevo en `gnss_tone_validation7/`.
   El wrapper final conecta `tone_out_TDATA` directamente a `dinb` y
   `bram_write` a `enb` y a los cuatro bits de `web`.
+- 2026-11-11: al abrir el Block Design se observaron `bram_0`…`bram_31` sin
+  conectar en `tone_capture_0`. El `system.bd` mostró que Vivado infería 32
+  interfaces ADI `jesd204_rx_ilas_config` desde el antiguo bus `bram_addr`, y
+  también intentaba agrupar `VALID` y `EN`. Se renombraron los puertos del
+  helper y se marcó `X_INTERFACE_IGNORE = "true"` en los cuatro que provocaban
+  la inferencia. El `system.bd` regenerado contiene sólo los ocho puertos RTL
+  esperados y ninguna interfaz inferida en `tone_capture_0`. Pasaron XSim,
+  `make -n` y la validación BD por `make gnss_arraysim.zcu102`; la síntesis no
+  se ejecutó.
 - 2026-11-11: el `make gnss_arraysim.zcu102` de ZCU102 pasa a validar el Block
   Design por defecto, sin lanzar síntesis, implementación ni bitstream. La
   validación se escribe en `gnss_bd_validation/`, separada del build completo.

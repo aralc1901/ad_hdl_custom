@@ -90,11 +90,23 @@ armar, durante pausa y después de completar. Reloj de `jam_tone_loop`, GPIO,
 capturador, BRAM B y controlador AXI BRAM: `sys_cpu_clk` (100 MHz); reset
 activo bajo `sys_cpu_resetn`. Se conecta `interrupt` del tono a `ps-14`; la
 captura se consulta por estado GPIO. No hay salida RF ni ArrayGen en esta etapa.
-La interfaz BRAM del capturador sólo expone `bram_write` y `bram_addr[31:0]`.
-En la dirección sólo los bits 11:0 pueden variar; los demás son cero porque el
-generador BRAM exige un puerto de 32 bits. `bram_write` habilita el puerto B y
-sus cuatro bytes de escritura. `tone_out_TDATA` llega directamente a `dinb`;
-los puertos de lectura pertenecen al controlador AXI BRAM.
+La interfaz de escritura del capturador sólo expone `capture_write_en` y
+`capture_write_addr[31:0]`. En la dirección sólo los bits 11:0 pueden variar;
+los demás son cero porque el generador BRAM exige un puerto de 32 bits.
+`capture_write_en` habilita el puerto B y sus cuatro bytes de escritura.
+`tone_out_TDATA` llega directamente a `dinb`; los puertos de lectura
+pertenecen al controlador AXI BRAM.
+
+Vivado confundía los nombres anteriores de los puertos RTL con interfaces del
+catálogo ADI: creaba `bram_0`…`bram_31` de tipo
+`analog.com:interface:jesd204_rx_ilas_config` a partir de un solo bus de
+dirección de 32 bits, además de agrupar señales `VALID` y `EN`. Eran
+**interfaces inferidas ficticias**, no lógica de captura ni puertos Verilog
+adicionales. Los puertos del helper se renombraron y se anotaron con
+`X_INTERFACE_IGNORE = "true"`, mecanismo documentado por
+[AMD UG994](https://docs.amd.com/r/2022.1-English/ug994-vivado-ip-subsystems/List-of-Supported-X_-Attributes?contentId=jpcM0W5nwj5Rmx~pVIALuA).
+El `system.bd` regenerado ya contiene sólo ocho puertos escalares/vectoriales
+en `tone_capture_0` y ninguna interfaz inferida para ese módulo.
 
 ### Paquete que usa Vivado
 
@@ -249,8 +261,15 @@ El 2026-11-11 se redujeron las dos señales de habilitación BRAM idénticas a
 `make -n` y la validación del Block Design pasaron de nuevo.
 El wrapper generado conecta `tone_out_TDATA` directamente a `dinb`,
 `bram_write` a `enb` y replica su valor en los cuatro bits de `web`.
-El ancho de `bram_addr` sigue siendo 32 bits porque
+El ancho de la dirección BRAM sigue siendo 32 bits porque
 Vivado marca como crítica la conexión directa de 12 bits a `addrb[31:0]`.
+
+El 2026-11-11 se corrigió la inferencia automática de interfaces del módulo
+RTL con `X_INTERFACE_IGNORE` en `tone_valid`, `tone_ready`,
+`capture_write_en` y `capture_write_addr`. La simulación XSim y
+`make gnss_arraysim.zcu102` pasaron; el nuevo Block Design validó y el wrapper
+mantiene las conexiones de datos, dirección y escritura. Se conservó el modo
+predeterminado sin síntesis.
 
 La dirección BRAM sigue el formato de byte del controlador: para 32 bits y
 4 KiB, AMD documenta que el índice de 1024 palabras ocupa `BRAM_Addr[11:2]`

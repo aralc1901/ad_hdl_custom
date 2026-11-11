@@ -8,11 +8,13 @@ module tone_capture (
   input  wire [31:0] control,
   output wire [31:0] status,
 
-  input  wire        s_axis_tvalid,
-  output wire        s_axis_tready,
+  // Keep these scalar pins visible in IPI. The ADI interface catalogue has
+  // generic VALID/EN/ADDR roles that otherwise create incomplete bus groups.
+  (* X_INTERFACE_IGNORE = "true" *) input  wire        tone_valid,
+  (* X_INTERFACE_IGNORE = "true" *) output wire        tone_ready,
 
-  output wire        bram_write,
-  output wire [31:0] bram_addr
+  (* X_INTERFACE_IGNORE = "true" *) output wire        capture_write_en,
+  (* X_INTERFACE_IGNORE = "true" *) output wire [31:0] capture_write_addr
 );
 
   localparam [10:0] CAPACITY = 11'd1024;
@@ -27,20 +29,20 @@ module tone_capture (
 
   wire arm_rise = control[0] && !arm_previous;
   wire [10:0] new_length = control[26:16];
-  wire transfer = s_axis_tvalid && s_axis_tready;
+  wire transfer = tone_valid && tone_ready;
 
   // A full or unarmed capture backpressures the producer. Pause allows the
   // same behavior to be exercised in the middle of a burst.
-  assign s_axis_tready = busy && !control[1] && (captured_count < requested_length);
+  assign tone_ready = busy && !control[1] && (captured_count < requested_length);
 
   // Port B of the true dual-port BRAM is a synchronous write port. On a
   // transfer edge the BRAM sees the old captured_count (the next free word).
-  assign bram_write = transfer;
+  assign capture_write_en = transfer;
   // AXI BRAM Controller presents byte offsets to the BRAM generator. Match
   // its word-aligned addresses so PS offset 4*n reads captured sample n.
-  assign bram_addr = {20'd0, captured_count[9:0], 2'b00};
+  assign capture_write_addr = {20'd0, captured_count[9:0], 2'b00};
 
-  assign status = {16'd0, s_axis_tready, rearm_while_busy,
+  assign status = {16'd0, tone_ready, rearm_while_busy,
                    invalid_length, busy, done, captured_count};
 
   always @(posedge clk) begin
