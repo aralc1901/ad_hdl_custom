@@ -1,6 +1,6 @@
 # Plan: proyecto GNSS ArraySim para FMCOMMS5 y ZCU102
 
-Fecha inicial: 2026-11-07. Actualización: 2026-11-10. Estado: esqueleto y
+Fecha inicial: 2026-11-07. Actualización: 2026-11-11. Estado: esqueleto y
 catálogo completados; primera captura digital de tono implementada y validada
 en Block Design y simulación del capturador. Síntesis e implementación de esta
 revisión pendientes.
@@ -236,3 +236,13 @@ direcciones AXI o IRQ, pues dependerán de la arquitectura elegida.
   validación del Block Design pasaron de nuevo en `gnss_tone_validation7/`.
   El wrapper final conecta `tone_out_TDATA` directamente a `dinb` y
   `bram_write` a `enb` y a los cuatro bits de `web`.
+- 2026-11-11: el `make gnss_arraysim.zcu102` de ZCU102 pasa a validar el Block
+  Design por defecto, sin lanzar síntesis, implementación ni bitstream. La
+  validación se escribe en `gnss_bd_validation/`, separada del build completo.
+  `GNSS_FULL_BUILD=1` como variable de entorno activa la receta ADI completa;
+  `ADI_MAX_OOC_JOBS=1` limita los trabajos OOC como en el build anterior
+  reportado por el usuario. `system_project.tcl` aplica el mismo valor por
+  defecto en invocaciones directas de Vivado. La ruta predeterminada se ejecutó
+  con código 0: `validate_bd_design` pasó y el log indicó `Skipping synthesis`.
+  La ruta completa sólo se inspeccionó mediante `make -n`; no se lanzó. Los
+  comandos están en el README.

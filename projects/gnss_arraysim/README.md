@@ -33,6 +33,46 @@ están en [`../../library/gnss_arraysim/README.md`](../../library/gnss_arraysim/
 La primera prueba digital de `jam_tone_loop` se describe abajo. Las otras tres
 IP siguen disponibles en el catálogo, sin instancias en el diseño.
 
+## Compilación: validación por defecto
+
+Desde la raíz del repositorio, `make gnss_arraysim.zcu102` prepara las
+dependencias ADI, crea el proyecto y valida el Block Design. Por defecto **no
+lanza síntesis, implementación ni generación de bitstream**. Escribe sus
+resultados en `projects/gnss_arraysim/zcu102/gnss_bd_validation/`, separado
+del build completo anterior, y deja allí `console.log` y `vivado.log`.
+
+```bash
+cd ~/fpga/git/ad_hdl_custom
+PATH="/tools/Xilinx/Vivado/2022.2/bin:$PATH" make gnss_arraysim.zcu102
+```
+
+Para ejecutar el flujo ADI completo y generar el bitstream y el XSA, activar
+explícitamente el flag **como variable de entorno delante de `make`**:
+
+```bash
+cd ~/fpga/git/ad_hdl_custom
+GNSS_FULL_BUILD=1 ADI_MAX_OOC_JOBS=1 \
+  PATH="/tools/Xilinx/Vivado/2022.2/bin:$PATH" make gnss_arraysim.zcu102
+```
+
+`GNSS_FULL_BUILD` sólo admite `0` (valor predeterminado) y `1`. El build
+completo sigue la receta ADI de `project-xilinx.mk`, que regenera los
+resultados de Vivado en el directorio habitual. La invocación directa de
+`system_project.tcl` también omite síntesis por defecto. No combinar
+`GNSS_FULL_BUILD=1` con `ADI_SKIP_SYNTHESIS`. `make -n` muestra la receta
+correspondiente sin ejecutarla. `make all` dentro de `zcu102/` sin el flag se
+rechaza antes de la receta que limpia resultados. El resto de proyectos ADI no
+cambia.
+
+Comprobación propia del 2026-11-11: `make -n gnss_arraysim.zcu102` mostró la
+receta de validación BD; `GNSS_FULL_BUILD=1 make -n gnss_arraysim.zcu102`
+mostró la receta ADI de síntesis e implementación. Se ejecutó realmente el
+`make` predeterminado con Vivado 2022.2: código 0, `validate_bd_design`
+satisfactorio y mensaje `Skipping synthesis` en
+`gnss_bd_validation/console.log`. No se generaron `.bit` ni `.xsa` en ese
+directorio. **El build completo con el flag no se ha ejecutado**; queda a
+decisión del usuario.
+
 ## Primera prueba digital: tono a BRAM
 
 ```text
@@ -165,7 +205,8 @@ la fase inicial propagada. La frecuencia nominal es
 | Archivo | Función |
 | --- | --- |
 | `zcu102/system_bd.tcl` | Añade generador, GPIO, capturador y BRAM; conserva el bloque común de FMCOMMS5. |
-| `zcu102/Makefile` | Declara `tone_capture.v` como dependencia de build. |
+| `zcu102/Makefile` | Declara `tone_capture.v` y selecciona validación BD por defecto o build completo con `GNSS_FULL_BUILD=1`. |
+| `zcu102/system_project.tcl` | Omite síntesis salvo que `GNSS_FULL_BUILD=1`; conserva el ajuste de retardos para el build completo. |
 | `zcu102/tone_capture.v` | Cuenta transferencias, escribe BRAM y publica estado. |
 | `zcu102/tb_tone_capture.sv` | Test focalizado de orden, longitud, contrapresión, errores y rearme. |
 | `zcu102/check_tone_package.tcl` | Comprueba VLNV y puertos en XCZU9EG sin síntesis. |
@@ -235,7 +276,11 @@ anterior.
 
 IRQ originales: DAC DMA `ps-12`; ADC DMA `ps-13`.
 
-## Comandos y registro de resultados
+## Comandos y registro de resultados históricos
+
+Comandos ejecutados durante la creación del esqueleto (2026-11-07), antes de
+añadir `GNSS_FULL_BUILD`. Para las compilaciones actuales, usar los comandos
+de la sección «Compilación: validación por defecto».
 
 Desde la raíz de `ad_hdl_custom`:
 
