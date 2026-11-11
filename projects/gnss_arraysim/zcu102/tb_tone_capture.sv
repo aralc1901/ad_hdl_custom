@@ -10,10 +10,8 @@ module tb_tone_capture;
   reg [31:0] s_axis_tdata = 32'd0;
   reg s_axis_tvalid = 1'b0;
   wire s_axis_tready;
-  wire bram_en;
-  wire bram_we;
+  wire bram_write;
   wire [31:0] bram_addr;
-  wire [31:0] bram_din;
 
   reg [31:0] memory [0:1023];
   integer writes = 0;
@@ -22,17 +20,16 @@ module tb_tone_capture;
 
   tone_capture dut (
     .clk(clk), .resetn(resetn), .control(control), .status(status),
-    .s_axis_tdata(s_axis_tdata), .s_axis_tvalid(s_axis_tvalid),
+    .s_axis_tvalid(s_axis_tvalid),
     .s_axis_tready(s_axis_tready),
-    .bram_en(bram_en), .bram_we(bram_we), .bram_addr(bram_addr),
-    .bram_din(bram_din)
+    .bram_write(bram_write), .bram_addr(bram_addr)
   );
 
   always @(posedge clk) begin
-    if (bram_en && bram_we) begin
+    if (bram_write) begin
       if (bram_addr > 4092 || bram_addr[1:0] != 2'b00)
         $fatal(1, "BRAM byte address outside capacity or unaligned");
-      memory[bram_addr[11:2]] <= bram_din;
+      memory[bram_addr[11:2]] <= s_axis_tdata;
       writes <= writes + 1;
     end
   end

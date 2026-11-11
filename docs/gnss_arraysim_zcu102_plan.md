@@ -226,3 +226,13 @@ direcciones AXI o IRQ, pues dependerán de la arquitectura elegida.
   con extensión de ceros en el wrapper y una advertencia de permisos del Tcl
   Store local. No se han ejecutado síntesis ni implementación con esta revisión,
   ni se ha probado el acceso Linux a la placa.
+- 2026-11-11: se simplificó la interfaz BRAM del capturador a una habilitación
+  de escritura y dirección. El dato `tone_out_TDATA` pasa directamente a la
+  BRAM. La habilitación gobierna `enb` y `web` del
+  puerto B; el puerto A sigue bajo control AXI del PS. Se probó una dirección
+  de sólo 12 bits, pero Vivado dejó sin conectar los bits superiores del puerto
+  BRAM de 32 bits y emitió `[BD 41-2383]`; se restauró el ancho de 32 bits con
+  los 20 superiores a cero. La simulación focalizada XSim, `make -n` y la
+  validación del Block Design pasaron de nuevo en `gnss_tone_validation7/`.
+  El wrapper final conecta `tone_out_TDATA` directamente a `dinb` y
+  `bram_write` a `enb` y a los cuatro bits de `web`.

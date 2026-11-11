@@ -33,7 +33,6 @@ ad_cpu_interrupt ps-14 mb-14 jam_tone_0/interrupt
 create_bd_cell -type module -reference tone_capture tone_capture_0
 ad_connect $sys_cpu_clk tone_capture_0/clk
 ad_connect $sys_cpu_resetn tone_capture_0/resetn
-ad_connect jam_tone_0/tone_out_TDATA tone_capture_0/s_axis_tdata
 ad_connect jam_tone_0/tone_out_TVALID tone_capture_0/s_axis_tvalid
 ad_connect tone_capture_0/s_axis_tready jam_tone_0/tone_out_TREADY
 
@@ -61,8 +60,8 @@ ad_ip_parameter tone_capture_bram CONFIG.Read_Width_B 32
 ad_ip_parameter tone_capture_bram CONFIG.Write_Depth_A 1024
 ad_connect tone_capture_axi_bram/BRAM_PORTA tone_capture_bram/BRAM_PORTA
 ad_connect $sys_cpu_clk tone_capture_bram/clkb
-ad_connect tone_capture_0/bram_en tone_capture_bram/enb
-ad_connect tone_capture_0/bram_we tone_capture_bram/web
+ad_connect tone_capture_0/bram_write tone_capture_bram/enb
+ad_connect tone_capture_0/bram_write tone_capture_bram/web
 ad_connect tone_capture_0/bram_addr tone_capture_bram/addrb
-ad_connect tone_capture_0/bram_din tone_capture_bram/dinb
+ad_connect jam_tone_0/tone_out_TDATA tone_capture_bram/dinb
 ad_cpu_interconnect 0x47010000 tone_capture_axi_bram

@@ -50,6 +50,11 @@ armar, durante pausa y después de completar. Reloj de `jam_tone_loop`, GPIO,
 capturador, BRAM B y controlador AXI BRAM: `sys_cpu_clk` (100 MHz); reset
 activo bajo `sys_cpu_resetn`. Se conecta `interrupt` del tono a `ps-14`; la
 captura se consulta por estado GPIO. No hay salida RF ni ArrayGen en esta etapa.
+La interfaz BRAM del capturador sólo expone `bram_write` y `bram_addr[31:0]`.
+En la dirección sólo los bits 11:0 pueden variar; los demás son cero porque el
+generador BRAM exige un puerto de 32 bits. `bram_write` habilita el puerto B y
+sus cuatro bytes de escritura. `tone_out_TDATA` llega directamente a `dinb`;
+los puertos de lectura pertenecen al controlador AXI BRAM.
 
 ### Paquete que usa Vivado
 
@@ -174,10 +179,10 @@ cd /tmp
 /tools/Xilinx/Vivado/2022.2/bin/vivado -mode batch \
   -source /home/clara/fpga/git/ad_hdl_custom/projects/gnss_arraysim/zcu102/check_tone_package.tcl
 cd /home/clara/fpga/git/ad_hdl_custom/projects/gnss_arraysim/zcu102
-mkdir -p gnss_tone_validation4
-ADI_PROJECT_DIR=gnss_tone_validation4/ ADI_SKIP_SYNTHESIS=1 \
+mkdir -p gnss_tone_validation7
+ADI_PROJECT_DIR=gnss_tone_validation7/ ADI_SKIP_SYNTHESIS=1 \
   /tools/Xilinx/Vivado/2022.2/bin/vivado -mode batch -source system_project.tcl \
-  -log gnss_tone_validation4/vivado.log -journal gnss_tone_validation4/vivado.jou
+  -log gnss_tone_validation7/vivado.log -journal gnss_tone_validation7/vivado.jou
 cd /tmp
 /tools/Xilinx/Vivado/2022.2/bin/xvlog -sv \
   /home/clara/fpga/git/ad_hdl_custom/projects/gnss_arraysim/zcu102/tone_capture.v \
@@ -197,6 +202,14 @@ usa puertos de 32 bits y un segmento AXI de 4 KiB. La advertencia crítica sobre
 el Tcl Store de usuario es de permisos del entorno; Vivado usó el almacén de
 instalación. Siguen las advertencias de la base FMCOMMS5. Quedan pendientes
 síntesis, implementación, timing, bitstream y prueba Linux/placa.
+
+El 2026-11-11 se redujeron las dos señales de habilitación BRAM idénticas a
+`bram_write` y se quitó el dato BRAM que sólo atravesaba el helper. XSim,
+`make -n` y la validación del Block Design pasaron de nuevo.
+El wrapper generado conecta `tone_out_TDATA` directamente a `dinb`,
+`bram_write` a `enb` y replica su valor en los cuatro bits de `web`.
+El ancho de `bram_addr` sigue siendo 32 bits porque
+Vivado marca como crítica la conexión directa de 12 bits a `addrb[31:0]`.
 
 La dirección BRAM sigue el formato de byte del controlador: para 32 bits y
 4 KiB, AMD documenta que el índice de 1024 palabras ocupa `BRAM_Addr[11:2]`

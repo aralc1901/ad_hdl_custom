@@ -8,14 +8,11 @@ module tone_capture (
   input  wire [31:0] control,
   output wire [31:0] status,
 
-  input  wire [31:0] s_axis_tdata,
   input  wire        s_axis_tvalid,
   output wire        s_axis_tready,
 
-  output wire        bram_en,
-  output wire        bram_we,
-  output wire [31:0] bram_addr,
-  output wire [31:0] bram_din
+  output wire        bram_write,
+  output wire [31:0] bram_addr
 );
 
   localparam [10:0] CAPACITY = 11'd1024;
@@ -38,12 +35,10 @@ module tone_capture (
 
   // Port B of the true dual-port BRAM is a synchronous write port. On a
   // transfer edge the BRAM sees the old captured_count (the next free word).
-  assign bram_en   = transfer;
-  assign bram_we   = transfer;
+  assign bram_write = transfer;
   // AXI BRAM Controller presents byte offsets to the BRAM generator. Match
   // its word-aligned addresses so PS offset 4*n reads captured sample n.
   assign bram_addr = {20'd0, captured_count[9:0], 2'b00};
-  assign bram_din  = s_axis_tdata;
 
   assign status = {16'd0, s_axis_tready, rearm_while_busy,
                    invalid_length, busy, done, captured_count};
