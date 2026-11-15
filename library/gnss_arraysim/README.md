@@ -18,11 +18,14 @@ el contenido importado y evitan atribuirlo erróneamente sólo al commit HEAD.
 No se encontró una licencia explícita en el repositorio de origen; aclarar la
 licencia antes de redistribuir estos paquetes.
 
-El paquete ArrayGen seleccionado es para `xczu9eg-ffvb1156-2-e`, la parte ZCU102.
-Los scripts de exportación de PRN, tono y ruido apuntan a `xczu7eg`; su
-compatibilidad de síntesis para ZCU102 no está demostrada. El paquete gaussiano
-tiene fallos estadísticos documentados en el repositorio de origen. Tono y
-ruido y PRN ya están instanciados para capturas digitales independientes en ZCU102;
-ArrayGen sigue sólo en el catálogo. Los paquetes no se han
-modificado ni reexportado; se validó su instanciación IPI para XCZU9EG, pero
+El paquete ArrayGen seleccionado se llama `zynqMP_arraygen_four_ip.zip`, pero
+el RTL principal importado y el del ZIP declaran `HLS_INPUT_PART=xczu7eg-ffvc1156-2-e`;
+el script HLS externo también apunta a XCZU7EG. Esta procedencia corrige la
+atribución anterior a XCZU9EG basada sólo en el nombre del ZIP. Los cuatro
+paquetes requieren comprobar síntesis y timing para ZCU102. El paquete gaussiano
+tiene fallos estadísticos documentados en el repositorio de origen. Tono,
+ruido y PRN tienen capturas digitales independientes en ZCU102. ArrayGen está
+instanciado con control AXI-Lite desde PS y estacionado sin camino de muestras;
+sus entradas FIFO se mantienen vacías y `ap_start=0`. Los paquetes no se han
+modificado ni reexportado. Se validó su instanciación IPI para XCZU9EG, pero
 siguen pendientes síntesis, timing y comprobación funcional en placa.

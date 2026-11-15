@@ -31,8 +31,9 @@ el árbol completo sea coherente; la integración de las IP GNSS se hará sólo 
 Los cuatro paquetes HLS completos, sus hashes y advertencias de procedencia
 están en [`../../library/gnss_arraysim/README.md`](../../library/gnss_arraysim/README.md).
 Las pruebas digitales de `jam_tone_loop`, `jam_gaussian_loop` y
-`gnss_prn_loop` se describen abajo. ArrayGen sigue disponible en el catálogo,
-sin instancia.
+`gnss_prn_loop` se describen abajo. `fp_arraygen_loop` también está instanciado
+en el Block Design con registros visibles desde PS; su camino de datos queda
+estacionado hasta incorporar adaptadores FIFO y un consumidor de 128 bits.
 
 ## Compilación: validación por defecto
 
@@ -85,7 +86,8 @@ PS AXI ──┬── AXI4-Lite jam_tone_loop ── tone_out ── capturador
          ├── AXI BRAM Controller G ── BRAM G puerto A ── PS/Linux
          ├── AXI4-Lite gnss_prn_loop (RAM chips) ── prn_out ── capturador P ── BRAM P puerto B
          ├── GPIO P (armado/estado) ──────────────────────────────────────────┘
-         └── AXI BRAM Controller P ── BRAM P puerto A ── PS/Linux
+         ├── AXI BRAM Controller P ── BRAM P puerto A ── PS/Linux
+         └── AXI4-Lite fp_arraygen_loop (ap_start=0, FIFO vacíos)
 
 FMCOMMS5: 2 × AD9361 ↔ FIFO de radio ↔ DMA ADC y DMA DAC (sin cambios)
 ```
@@ -99,7 +101,7 @@ capturadores, BRAM B y controladores AXI BRAM usan `sys_cpu_clk` (100 MHz); rese
 activo bajo `sys_cpu_resetn`. Se conecta `interrupt` del tono a `ps-14`; la
 captura se consulta por estado GPIO. Ruido y PRN comparten `ps-15` a través
 de una OR; las fuentes se distinguen mediante sus ISR HLS si se habilitan las
-IRQ. No hay salida RF ni ArrayGen en esta etapa.
+IRQ. ArrayGen no alimenta la salida RF en esta etapa.
 
 La interfaz de escritura del capturador sólo expone `capture_write_en` y
 `capture_write_addr[31:0]`. En la dirección sólo los bits 11:0 pueden variar;
@@ -168,6 +170,7 @@ es la que debe usar Linux; se comprobó en el `system.bd` generado.
 | `gnss_prn_0` (incluye RAM de chips) | `0x47060000` | `0x87060000` | 64 KiB |
 | BRAM PRN | `0x47070000` | `0x87070000` | 4 KiB |
 | GPIO PRN | `0x47080000` | `0x87080000` | 4 KiB |
+| `fp_arraygen_0` | `0x47090000` | `0x87090000` | 64 KiB |
 | AD9361 0 | `0x79020000` | `0x99020000` | 64 KiB |
 | AD9361 1 | `0x79040000` | `0x99040000` | 64 KiB |
 | DMA ADC | `0x7C400000` | `0x9C400000` | 4 KiB |
@@ -243,6 +246,7 @@ la fase inicial propagada. La frecuencia nominal es
 | `zcu102/check_tone_package.tcl` | Comprueba VLNV y puertos en XCZU9EG sin síntesis. |
 | `zcu102/check_gaussian_package.tcl` | Comprueba VLNV y puertos del ruido en XCZU9EG sin síntesis. |
 | `zcu102/check_prn_package.tcl` | Comprueba VLNV y puertos del PRN en XCZU9EG sin síntesis. |
+| `zcu102/check_arraygen_package.tcl` | Comprueba VLNV e interfaces de ArrayGen en XCZU9EG sin síntesis. |
 | `zcu102/capture_tone.py` | Procedimiento de control y lectura Linux; `Window` admite tamaño de mapa para acceder a la RAM interna PRN; pendiente de prueba en placa. |
 | `zcu102/capture_gaussian.py` | Control y lectura Linux del ruido; pendiente de prueba en placa. |
 | `zcu102/capture_prn.py` | Carga chips por AXI-Lite, configura el PRN y guarda la captura desde Linux; pendiente de prueba en placa. |
@@ -258,6 +262,8 @@ cd /tmp
   -source /home/clara/fpga/git/ad_hdl_custom/projects/gnss_arraysim/zcu102/check_gaussian_package.tcl
 /tools/Xilinx/Vivado/2022.2/bin/vivado -mode batch \
   -source /home/clara/fpga/git/ad_hdl_custom/projects/gnss_arraysim/zcu102/check_prn_package.tcl
+/tools/Xilinx/Vivado/2022.2/bin/vivado -mode batch \
+  -source /home/clara/fpga/git/ad_hdl_custom/projects/gnss_arraysim/zcu102/check_arraygen_package.tcl
 cd /home/clara/fpga/git/ad_hdl_custom
 PATH="/tools/Xilinx/Vivado/2022.2/bin:$PATH" make gnss_arraysim.zcu102
 cd /tmp
@@ -470,6 +476,63 @@ El script pasó `--help`; una prueba Python comprobó lectura de CSV, empaquetad
 de chips pares/impares (también longitud impar) y codificación IEEE-754. El
 script de tono siguió pasando `--help` tras ampliar `Window` a 16 KiB para
 el mapa de control PRN; su valor predeterminado sigue siendo 4 KiB.
+
+### ArrayGen: cuarta IP instanciada
+
+Se ha instanciado `fp_arraygen_0` desde el paquete importado
+`library/gnss_arraysim/fp_arraygen_loop/`, VLNV
+`CTTC:array:fp_arraygen_loop:1.0`. Se revisaron `component.xml`, RTL principal,
+cabecera `drivers/fp_arraygen_loop_v1_0/src/xfp_arraygen_loop_hw.h` y fuente
+HLS externa. El ZIP de origen es
+`gnss_arraysim_hdl/ip_cores/fp_arraygen/ip_packages/zynqMP_arraygen_four_ip.zip`,
+SHA-256 `5284fb400d1065bfded1f4140790522fe8da81229eddf72952492a39e9e9a2df`.
+El RTL principal del ZIP coincide byte a byte con el importado (SHA-256
+`58c21ec8115dc25645bd6451233108fcbb7ca80ad31270cacec592d75bc912a6`).
+El ZIP no está versionado en el repositorio externo; las fuentes de `src/`
+no tenían diff local al inspeccionarlas. **El nombre del ZIP no identifica la
+parte usada para exportar:** el RTL HLS y el script externo indican
+`xczu7eg-ffvc1156-2-e`, mientras este proyecto usa
+`xczu9eg-ffvb1156-2-e`. El paquete no se modificó ni reexportó.
+
+ArrayGen dispone de `s_axi_control`, reloj y reset, control por pines
+`ap_ctrl_chain`, entrada `baseband_in` `ap_fifo` de 24 bits (I/Q de 12),
+entrada opcional `w_realtime` `ap_fifo` de 256 bits y salida `arraygen_out`
+`ap_fifo` de 128 bits (cuatro antenas × I/Q de 16 bits). No ofrece AXI4-Stream
+ni interrupción. Su AXI-Lite **no** incluye `ap_start`: sólo configura
+`mode` en offset `0x10` (8 bits), `output_scale` en `0x18` (float32) y pesos
+complejos float32 `w1` en `0x20/0x24`, `w2` en `0x2c/0x30`, `w3` en
+`0x38/0x3c`, `w4` en `0x44/0x48`. Las direcciones son relativas a
+`0x87090000`. La fuente HLS usa los pesos AXI-Lite cuando `mode=0`; en otros
+modos puede leer `w_realtime` si hay datos.
+
+El BD conecta `ap_clk` a `sys_cpu_clk` (100 MHz), `ap_rst_n` a
+`sys_cpu_resetn` y AXI-Lite al PS. Para mantener intactas las tres capturas y
+ambos DMA, el núcleo queda estacionado: `ap_start=0`, `ap_continue=1`,
+`baseband_in_empty_n=0`, `w_realtime_empty_n=0`, sus datos de entrada a cero y
+`arraygen_out_full_n=0`. No se solicitan lecturas FIFO ni se aceptan
+escrituras de salida. Los pines de salida de ArrayGen quedan sin consumidor
+en este hito; no se declara procesamiento funcional ni presencia garantizada
+de lógica útil tras optimización de síntesis. El PS puede leer/escribir los
+registros AXI-Lite, pero eso no inicia el cálculo.
+
+Para activar un camino funcional faltan: selección de fuente entre PRN, tono,
+ruido u otra entrada; adaptación de 32 bits Q2.14 a 24 bits I/Q de 12 con una
+regla de redondeo/saturación; puente `AXI4-Stream` → `ap_fifo` con
+contrapresión; política para `w_realtime` y `ap_ctrl_chain`; consumidor o
+capturador de 128 bits; y, si se desea RF, conexión al FIFO DAC FMCOMMS5
+preservando el DMA TX. También deben comprobarse síntesis, timing y pruebas
+funcionales con ZCU102. Esas decisiones no se deducen de la mera instancia.
+
+Comprobación propia del 2026-11-15: `check_arraygen_package.tcl` registró el
+VLNV y sus cinco interfaces en un proyecto en memoria para XCZU9EG; `make -n`
+terminó con código 0. El `make` predeterminado también terminó con código 0:
+creó `gnss_bd_validation/gnss_arraysim_zcu102.xpr`, validó `system.bd` y
+registró `Skipping synthesis`. En el BD generado ArrayGen figura como
+`CTTC:array:fp_arraygen_loop:1.0`, su segmento AXI PS es `0x87090000/64K`,
+las entradas de parking están conectadas a constantes y permanecen los tres
+capturadores y ambos DMA. No ejecutó síntesis, implementación ni bitstream.
+La advertencia de permisos del Tcl Store local es ambiental; subsisten las
+advertencias previas de ancho 12→32 de los puertos BRAM A.
 
 ## Direcciones AXI del diseño base (históricas)
 

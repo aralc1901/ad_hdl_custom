@@ -1,13 +1,13 @@
 # Plan: proyecto GNSS ArraySim para FMCOMMS5 y ZCU102
 
-Fecha inicial: 2026-11-07. Actualización: 2026-11-11. Estado: esqueleto y
-catálogo completados; capturas digitales independientes de tono, ruido
-gaussiano y PRN implementadas en Block Design y simulación del
-capturador. Síntesis e implementación de esta revisión pendientes.
+Fecha inicial: 2026-11-07. Actualización: 2026-11-15. Estado: cuatro IP
+instanciadas en el Block Design; capturas digitales de tono, ruido y PRN
+implementadas y ArrayGen estacionado hasta integrar su ruta FIFO. La síntesis,
+implementación y prueba física de esta revisión siguen pendientes.
 
 > Las secciones de inventario y decisiones pendientes conservan el contexto
-> histórico. Tras las pruebas de tono y ruido, la etapa actual añade
-> `gnss_prn_loop` → captura digital finita en otra BRAM, manteniendo
+> histórico. Tras las tres capturas digitales, la etapa actual incorpora
+> `fp_arraygen_loop` al Block Design con AXI-Lite y entradas seguras, manteniendo
 > FMCOMMS5 y ambos DMA. La
 > arquitectura, mapa, registros y uso desde Linux están en
 > [`../projects/gnss_arraysim/README.md`](../projects/gnss_arraysim/README.md).
@@ -91,7 +91,9 @@ Los límites se ajustarán a lo que revele el inventario:
    digital, con capturador compartido, BRAM independiente y acceso desde PS.
 6. `projects: add GNSS PRN digital capture on ZCU102` — tercera prueba
    digital, con carga de chips por AXI-Lite y BRAM independiente.
-7. Integración de ArrayGen, ruta RF y validación física — etapas posteriores.
+7. `projects: instantiate GNSS ArrayGen on ZCU102` — cuarta IP en el BD,
+   inicialmente estacionada y accesible por AXI-Lite.
+8. Ruta de datos ArrayGen/RF y validación física — etapas posteriores.
 
 No se harán `git push`.
 
@@ -146,11 +148,11 @@ distribuidor de la salida de 128 bits hacia los ocho puertos de `util_rfifo`.
 La compatibilidad de ritmo entre ráfagas HLS y el DAC continuo aún no está
 demostrada: se debe definir buffering y comportamiento durante huecos.
 
-Los scripts HLS del PRN, tono y ruido apuntan a
-`xczu7eg-ffvc1156-2-e`; ArrayGen ofrece una variante para
-`xczu9eg-ffvb1156-2-e`, la parte usada por ZCU102 en la referencia. Antes de
-integrar los tres primeros hay que reexportarlos para la parte destino o
-comprobar formalmente la compatibilidad en Vivado 2022.2. El proyecto Vivado
+Los scripts HLS del PRN, tono, ruido y ArrayGen apuntan a
+`xczu7eg-ffvc1156-2-e`. El nombre `zynqMP` del ZIP ArrayGen llevó inicialmente
+a atribuirlo a XCZU9EG, pero el RTL empaquetado de ambas variantes ZynqMP
+confirma XCZU7EG. Para la parte ZCU102 se ha comprobado la instanciación IPI;
+siguen pendientes síntesis y timing. El proyecto Vivado
 no versionado del repositorio externo contiene tono, ArrayGen, un FIFO AXI e
 ILA, pero no constituye un esquema completo de FMCOMMS5.
 
@@ -313,3 +315,25 @@ direcciones AXI o IRQ, pues dependerán de la arquitectura elegida.
   `Window` para admitir un mapa PRN de 16 KiB. Quedan pendientes build completo, timing,
   bitstream, prueba física y referencia funcional PRN. Los diez borrados
   locales del usuario en ZC702/ZC706 se mantuvieron al margen.
+- 2026-11-15: se revisó el paquete ArrayGen realmente importado antes de
+  editar. `component.xml`, RTL, cabecera de registros y fuente HLS confirman
+  VLNV `CTTC:array:fp_arraygen_loop:1.0`; AXI4-Lite configura modo, escala y
+  cuatro pesos complejos, mientras `ap_ctrl_chain` y los tres puertos
+  `ap_fifo` son pines separados. Entrada baseband 24 bits, pesos en tiempo
+  real 256 bits y salida de cuatro antenas 128 bits. El ZIP importado tiene
+  SHA-256 `5284fb400d1065bfded1f4140790522fe8da81229eddf72952492a39e9e9a2df`;
+  el RTL principal coincide con el ZIP. Aunque se llama `zynqMP`, sus
+  metadatos RTL declaran `HLS_INPUT_PART=xczu7eg-ffvc1156-2-e`, no XCZU9EG.
+  Se corrigió la atribución previa. El paquete no se modificó ni reexportó.
+- 2026-11-15: se añadió `fp_arraygen_0` a `system_bd.tcl` con reloj/reset
+  comunes y AXI-Lite PS en `0x87090000` (Tcl `0x47090000`). Quedó
+  estacionado con `ap_start=0`, FIFO de entrada vacíos y salida no disponible
+  para no modificar las capturas y DMA FMCOMMS5. Los pines de salida están
+  sin consumidor hasta implementar adaptadores y la ruta de 128 bits.
+  `check_arraygen_package.tcl` registró e instanció el VLNV en un proyecto
+  Vivado 2022.2 en memoria para XCZU9EG. `make -n gnss_arraysim.zcu102` pasó;
+  el `make` predeterminado creó el `.xpr` y validó `system.bd` con código 0 y
+  `Skipping synthesis`. El mapa PS generado no presenta solapamientos y
+  conserva los tres capturadores y ambos DMA. No se han ejecutado síntesis,
+  implementación, timing ni prueba en placa. Los diez borrados locales del
+  usuario bajo ZC702/ZC706 quedaron intactos; no hubo push.

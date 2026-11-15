@@ -156,3 +156,19 @@ ad_connect prn_capture_0/capture_write_en prn_capture_bram/web
 ad_connect prn_capture_0/capture_write_addr prn_capture_bram/addrb
 ad_connect gnss_prn_0/prn_out_TDATA prn_capture_bram/dinb
 ad_cpu_interconnect 0x47070000 prn_capture_axi_bram
+
+# ArrayGen is present for PS register access but deliberately parked until a
+# clock-matched AXIS-to-ap_fifo input adapter, weight policy, and 128-bit
+# output consumer are designed. Its ap_ctrl_chain start is a separate pin,
+# not the AXI-Lite AP_CTRL register used by the three generators above.
+create_bd_cell -type ip -vlnv CTTC:array:fp_arraygen_loop:1.0 fp_arraygen_0
+ad_connect $sys_cpu_clk fp_arraygen_0/ap_clk
+ad_connect $sys_cpu_resetn fp_arraygen_0/ap_rst_n
+ad_cpu_interconnect 0x47090000 fp_arraygen_0
+ad_connect fp_arraygen_0/ap_start GND
+ad_connect fp_arraygen_0/ap_continue VCC
+ad_connect fp_arraygen_0/baseband_in_dout GND
+ad_connect fp_arraygen_0/baseband_in_empty_n GND
+ad_connect fp_arraygen_0/w_realtime_dout GND
+ad_connect fp_arraygen_0/w_realtime_empty_n GND
+ad_connect fp_arraygen_0/arraygen_out_full_n GND
