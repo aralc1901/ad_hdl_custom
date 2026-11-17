@@ -1,0 +1,10 @@
+/include/ "system-conf.dtsi"
+
+/ {
+    model = "GNSS ArraySim ZCU102 + FMCOMMS5 (laboratory)";
+};
+
+/* ADI's FMCOMMS5 DTS supplies both SPI PHYs, IIO ADC/DAC, DMA and sync GPIOs.
+ * Capture nodes are disabled by isolate-capture.py after DT generation so only
+ * the root-run /dev/mem scripts own their registers. No UIO IRQ is requested.
+ */

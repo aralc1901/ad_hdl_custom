@@ -1,0 +1,13 @@
+#!/bin/sh
+set -eu
+[ "$(id -u)" = 0 ] || { echo 'Ejecutar como root.' >&2; exit 1; }
+[ -c /dev/mem ] || { echo 'Falta /dev/mem.' >&2; exit 1; }
+python3 -c 'import argparse,csv,math,mmap,os,struct,time'
+echo 'Dispositivos IIO (se esperan ad9361-phy y ad9361-phy-B):'
+iio_info -s
+iio_info -u local:
+echo 'Herramientas de captura:'
+for script in /opt/gnss-arraysim/capture_*.py; do
+    python3 "$script" --help >/dev/null
+done
+echo 'Comprobación de software terminada; no se han arrancado capturas ni TX.'

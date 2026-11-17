@@ -1,5 +1,9 @@
 # GNSS ArraySim para FMCOMMS5/ZCU102
 
+La imagen Linux de laboratorio y sus scripts de preparación, compilación y
+empaquetado se encuentran en [`petalinux/README.md`](petalinux/README.md).
+Incluye las capturas Python y soporte ADI/IIO para ZCU102 + FMCOMMS5.
+
 Proyecto derivado de `projects/fmcomms5` del mismo repositorio, revisión
 `ae6e248f2`. Conserva el bloque de dos AD9361, el mapeo de FMC, la
 sincronización, los relojes, GPIO/SPI, los FIFO de radio y ambos DMA.

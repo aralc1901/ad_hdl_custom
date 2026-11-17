@@ -1,0 +1,7 @@
+/* Fixed ZCU102 UART0 + initramfs boot configuration. No SD root partition. */
+/ {
+    chosen {
+        bootargs = "earlycon console=ttyPS0,115200 clk_ignore_unused";
+        stdout-path = "serial0:115200n8";
+    };
+};
